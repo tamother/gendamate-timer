@@ -1,4 +1,4 @@
-import { formatTime, PRESETS } from './timer-core.mjs?v=7';
+import { formatTime, PRESETS } from './timer-core.mjs?v=8';
 
 export function timingStatus(task) {
   const seconds = (task.result?.elapsedMs ?? 0) / 1000;

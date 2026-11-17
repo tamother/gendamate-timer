@@ -1,6 +1,6 @@
-import { PRESETS, Timer, makeTask, formatTime } from './timer-core.mjs?v=7';
-import { timingStatus, activityName, groupRecords, reportText, reportCsv } from './report.mjs?v=7';
-import { parseAgendaImport, saveTimingRecord } from './agenda-adapter.mjs?v=7';
+import { PRESETS, Timer, makeTask, formatTime, thresholdsForDuration } from './timer-core.mjs?v=8';
+import { timingStatus, activityName, groupRecords, reportText, reportCsv } from './report.mjs?v=8';
+import { parseAgendaImport, saveTimingRecord } from './agenda-adapter.mjs?v=8';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound'];
@@ -55,10 +55,61 @@ function leaveDisplay() {
 
 function parseTime(value) {
   const match = /^(\d{1,3}):([0-5]\d)$/.exec(value.trim());
-  if (!match) throw new Error('时间请填写为 分钟:秒，例如 02:30。');
+  if (!match) throw new Error('请检查分、秒输入：分钟为 0–999，秒数为 0–59。');
   return Number(match[1]) * 60 + Number(match[2]);
 }
 function timeInput(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
+function setDuration(id, seconds) {
+  const value = Math.max(0, Math.min(59999, Math.round(seconds)));
+  $(id).value = timeInput(value);
+  $(`${id}-minutes`).value = String(Math.floor(value / 60)).padStart(2, '0');
+  $(`${id}-seconds`).value = String(value % 60).padStart(2, '0');
+}
+function readParts(prefix) {
+  const minutes = $(`${prefix}-minutes`).value;
+  const seconds = $(`${prefix}-seconds`).value;
+  if (!/^\d+$/.test(minutes) || !/^\d+$/.test(seconds) || Number(minutes) > 999 || Number(seconds) > 59) throw new Error('分钟请填 0–999，秒数请填 0–59。');
+  return Number(minutes) * 60 + Number(seconds);
+}
+function showCustomDuration() {
+  $('custom-duration').hidden = $('preset').value !== 'custom';
+  const total = parseTime($('red').value || '07:00');
+  $('total-minutes').value = Math.floor(total / 60);
+  $('total-seconds').value = total % 60;
+  $('auto-rule').textContent = '超过3分钟且不超过10分钟：剩余2分钟绿牌、剩余1分钟黄牌、时间到红牌。';
+}
+function applyCustomDuration() {
+  try {
+    const seconds = readParts('total');
+    if (seconds <= 0) throw new Error('总时长需要大于 0 秒。');
+    if (seconds > 180 && seconds <= 600) {
+      const thresholds = thresholdsForDuration(seconds);
+      for (const key of ['green','yellow','red']) setDuration(key, thresholds[key]);
+      $('auto-rule').textContent = `已自动填写：绿牌 ${timeInput(thresholds.green)} · 黄牌 ${timeInput(thresholds.yellow)} · 红牌 ${timeInput(thresholds.red)}。`;
+    } else {
+      $('auto-rule').textContent = '当前总时长不在自动范围内，请手动调整下方三张牌；红牌时间作为最终总时长。';
+    }
+    setError(); saveSettings();
+  } catch (error) { setError(error.message); }
+}
+for (const id of ['green','yellow','red']) {
+  for (const part of ['minutes','seconds']) {
+    const field = $(`${id}-${part}`);
+    field.addEventListener('input', () => {
+      try {
+        $(id).value = timeInput(readParts(id));
+        if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。';
+        setError(); saveSettings();
+      } catch(error) { $(id).value = ''; setError(error.message); }
+    });
+    field.addEventListener('change', () => { try { setDuration(id, readParts(id)); } catch {} });
+  }
+}
+for (const button of document.querySelectorAll('[data-duration]')) button.addEventListener('click', () => {
+  const id = button.dataset.duration;
+  try { setDuration(id, readParts(id) + Number(button.dataset.step)); if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。'; setError(); saveSettings(); } catch(error) { setError(error.message); }
+});
+for (const id of ['total-minutes','total-seconds']) $(id).addEventListener('input', applyCustomDuration);
 function settings() { return Object.fromEntries(fields.map(id => [id, id === 'sound' ? $(id).checked : $(id).value])); }
 function saveSettings() { try { localStorage.setItem(STORAGE, JSON.stringify(settings())); } catch {} }
 function loadSettings() {
@@ -73,6 +124,7 @@ function loadSettings() {
   } catch {}
 }
 function config() {
+  if ($('preset').value === 'custom' && readParts('total') <= 0) throw new Error('请填写大于 0 秒的总时长。');
   const title = $('title').value.trim();
   if (!title) throw new Error('请填写标题。');
   if (!$('speaker').value.trim()) throw new Error('请填写发言人姓名。');
@@ -80,7 +132,7 @@ function config() {
     thresholds: { green: parseTime($('green').value), yellow: parseTime($('yellow').value), red: parseTime($('red').value) } };
 }
 function setError(message = '') { $('error').textContent = message; }
-function lockSettings(locked) { for (const id of ['preset', 'title', 'speaker', 'green', 'yellow', 'red']) $(id).disabled = locked; }
+function lockSettings(locked) { for (const id of ['preset', 'title', 'speaker', 'green', 'yellow', 'red','total-minutes','total-seconds']) $(id).disabled = locked; document.querySelectorAll('.duration-control input,.duration-control button').forEach(field => { field.disabled = locked; }); }
 function playCue(color) {
   if (!$('sound').checked || color === 'neutral') return;
   try {
@@ -186,7 +238,8 @@ function loadPlan(plan) {
   if (['running','paused'].includes(timer?.state)) return;
   resetPerson(); activePlan = plan;
   $('preset').value = plan.activity; $('title').value = plan.activityLabel; $('speaker').value = plan.speaker;
-  for (const key of ['green','yellow','red']) $(key).value = timeInput(plan.thresholds[key]);
+  for (const key of ['green','yellow','red']) setDuration(key, plan.thresholds[key]);
+  showCustomDuration();
   setError(plan.warning || ''); saveSettings(); render();
   $('start').scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
@@ -252,8 +305,10 @@ $('preset').addEventListener('change', () => {
   const preset = PRESETS[$('preset').value];
   if (preset) {
     $('title').value = preset.title;
-    for (const key of ['green', 'yellow', 'red']) $(key).value = timeInput(preset[key]);
+    for (const key of ['green', 'yellow', 'red']) setDuration(key, preset[key]);
   }
+  showCustomDuration();
+  if (!preset) { if (Object.values(PRESETS).some(p => p.title === $('title').value)) $('title').value = '自定义环节'; applyCustomDuration(); }
   setError(); saveSettings(); render();
 });
 for (const id of fields) $(id).addEventListener('input', () => { saveSettings(); setError(); if (id === 'title') render(); });
@@ -325,6 +380,8 @@ $('html-report').addEventListener('click', () => {
   } catch { $('report-message').textContent = '无法生成预览，请检查浏览器存储后重试。'; }
 });
 $('print-report').addEventListener('click', () => window.print());
-loadSettings(); renderMeetings(); renderRecords(); render();
+loadSettings();
+for (const key of ['green','yellow','red']) { try { setDuration(key, parseTime($(key).value)); } catch { setDuration(key, PRESETS.speech[key]); } }
+showCustomDuration(); renderMeetings(); renderRecords(); render();
 setInterval(render, 100);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});

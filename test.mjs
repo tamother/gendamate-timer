@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PRESETS, Timer, makeTask, colorAt, formatTime, validateThresholds } from './timer-core.mjs';
+import { thresholdsForDuration } from './timer-core.mjs';
+
+test('自定义总时长按剩余2分钟、1分钟和到点计算，并验证范围', () => {
+  assert.deepEqual(thresholdsForDuration(480), {green:360,yellow:420,red:480});
+  assert.deepEqual(thresholdsForDuration(510), {green:390,yellow:450,red:510});
+  assert.deepEqual(thresholdsForDuration(181), {green:61,yellow:121,red:181});
+  assert.deepEqual(thresholdsForDuration(600), {green:480,yellow:540,red:600});
+  for (const value of [0,180,601,NaN,480.5]) assert.throws(() => thresholdsForDuration(value));
+});
 
 test('预设阈值和颜色切换', () => {
   assert.deepEqual([PRESETS.speech.green, PRESETS.speech.yellow, PRESETS.speech.red], [300, 360, 420]);

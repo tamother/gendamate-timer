@@ -13,6 +13,13 @@ export function validateThresholds({ green, yellow, red }) {
   return { green: values[0], yellow: values[1], red: values[2] };
 }
 
+export function thresholdsForDuration(seconds) {
+  if (!Number.isInteger(seconds) || seconds <= 180 || seconds > 600) {
+    throw new Error('自动规则适用于超过 3 分钟且不超过 10 分钟的总时长。');
+  }
+  return { green: seconds - 120, yellow: seconds - 60, red: seconds };
+}
+
 export function colorAt(seconds, thresholds) {
   if (seconds >= thresholds.red) return 'red';
   if (seconds >= thresholds.yellow) return 'yellow';

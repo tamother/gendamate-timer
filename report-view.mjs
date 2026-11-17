@@ -1,4 +1,4 @@
-import { reportCanvasData } from './report.mjs?v=7';
+import { reportCanvasData } from './report.mjs?v=8';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}

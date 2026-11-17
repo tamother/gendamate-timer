@@ -130,3 +130,42 @@ test('总时长已超出时，嘉宾分段仍按自定义阈值独立变牌', ()
   now=30000;assert.equal(presentationState(session,person).color,'red');
   person.finish();assert.equal(presentationState(session,null,person).color,'neutral');
 });
+
+import { sceneForAgendaTitle, upgradeAgendaPlans } from './agenda-adapter.mjs';
+test('三类多人环节优先按中英文名称匹配，保留总时长和主持人', () => {
+  const names=[['即兴演讲','topics',20,[60,90,120]],['Table Topics Session','topics',15,[60,90,120]],['宾客介绍','guests',5,[20,25,30]],['嘉宾介绍','guests',3,[20,25,30]],['Guest Introduction','guests',5,[20,25,30]],['真情时刻','sharing',5,[40,50,60]],['真情分享','sharing',7,[40,50,60]],['Moment of Truth','sharing',4,[40,50,60]],['宾客介绍 / Guest Introduction','guests',4,[20,25,30]]];
+  for(const [title,scene,duration,thresholds] of names){
+    const [plan]=parseAgendaImport({meeting:{agenda:[{i:title,n:'主持人',d:duration}]}}).tasks;
+    assert.equal(plan.activity,'tableTopicsSession',title);
+    assert.equal(plan.scene,scene,title);
+    assert.deepEqual(Object.values(plan.thresholds),thresholds,title);
+    assert.equal(plan.estimatedMinutes,duration);
+    assert.equal(plan.speaker,'主持人');
+  }
+});
+test('点评和其他普通环节不误匹配为多人发言', () => {
+  for(const title of ['即兴演讲点评','TT Evaluation','Guest Introduction Evaluation','时间官规则介绍','分享收获','Prepared Speech']){
+    assert.equal(sceneForAgendaTitle(title),null,title);
+    const [plan]=parseAgendaImport({meeting:{agenda:[{i:title,d:3}]}}).tasks;
+    assert.equal(plan.activity,'evaluation',title);
+  }
+});
+test('旧议程只更新未完成的导入条目，保留标识顺序与已调好的每人时间', () => {
+  const source={provider:'agendamate'};
+  const plans=[
+    {id:'done',title:'宾客介绍',activity:'speech',thresholds:PRESETS.speech,agendaSource:source},
+    {id:'pending',title:'真情时刻',activity:'speech',thresholds:PRESETS.speech,estimatedMinutes:5,agendaSource:source},
+    {id:'manual',title:'嘉宾介绍',activity:'speech',thresholds:PRESETS.speech},
+    {id:'tuned',title:'即兴演讲',activity:'tableTopicsSession',scene:'topics',thresholds:{green:30,yellow:45,red:60},agendaSource:source}
+  ];
+  const result=upgradeAgendaPlans(plans,[{plannedId:'done'}]);
+  assert.deepEqual(result.map(p=>p.id),plans.map(p=>p.id));
+  assert.equal(result[0],plans[0]);
+  assert.equal(result[1].scene,'sharing');
+  assert.deepEqual(result[1].thresholds,{green:40,yellow:50,red:60});
+  assert.equal(result[1].estimatedMinutes,5);
+  assert.equal(result[2],plans[2]);
+  assert.equal(result[3],plans[3]);
+  assert.deepEqual(upgradeAgendaPlans(result,[{plannedId:'done'}]),result);
+  assert.equal(plans[1].activity,'speech');
+});

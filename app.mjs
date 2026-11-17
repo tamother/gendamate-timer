@@ -1,6 +1,6 @@
-import { PRESETS, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=10';
-import { timingStatus, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=10';
-import { parseAgendaImport, saveTimingRecord } from './agenda-adapter.mjs?v=10';
+import { PRESETS, MULTI_SCENES, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=11';
+import { timingStatus, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=11';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=11';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -11,7 +11,7 @@ const DATA = 'toastmasters-meetings-v1';
 function localDate() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`; }
 function newMeeting(name = '头马例会') { return { id: crypto.randomUUID(), name, date: localDate(), records: [] }; }
 function loadData() {
-  try { const saved = JSON.parse(localStorage.getItem(DATA)); if (saved?.meetings?.length && saved.meetings.every(m => Array.isArray(m.records))) return saved; } catch {}
+  try { const saved = JSON.parse(localStorage.getItem(DATA)); if (saved?.meetings?.length && saved.meetings.every(m => Array.isArray(m.records))) { for (const meeting of saved.meetings) if (Array.isArray(meeting.plannedTasks)) meeting.plannedTasks = upgradeAgendaPlans(meeting.plannedTasks,meeting.records); return saved; } } catch {}
   const meeting = newMeeting();
   try {
     const old = JSON.parse(localStorage.getItem(RECORDS));
@@ -119,13 +119,8 @@ for (const button of document.querySelectorAll('[data-duration]')) button.addEve
   try { setDuration(id, readParts(id) + Number(button.dataset.step)); if ($('preset').value === 'tableTopicsSession') $('session-scene').value = 'manual'; if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。'; setError(); saveSettings(); } catch(error) { setError(error.message); }
 });
 for (const id of ['total-minutes','total-seconds']) $(id).addEventListener('input', applyCustomDuration);
-const scenes = {
-  topics: { title:'即兴演讲', green:60, yellow:90, red:120 },
-  guests: { title:'嘉宾介绍', green:20, yellow:25, red:30 },
-  sharing: { title:'真情分享', green:40, yellow:50, red:60 },
-};
 $('session-scene').addEventListener('change', () => {
-  const scene = scenes[$('session-scene').value];
+  const scene = MULTI_SCENES[$('session-scene').value];
   if (scene) { for (const key of ['green','yellow','red']) setDuration(key,scene[key]); $('title').value = scene.title; }
   setError(); saveSettings(); render();
 });
@@ -275,7 +270,7 @@ function loadPlan(plan) {
   resetPerson(); activePlan = plan;
   $('preset').value = plan.activity; $('title').value = plan.activityLabel; $('speaker').value = plan.speaker;
   for (const key of ['green','yellow','red']) setDuration(key, plan.thresholds[key]);
-  if (plan.activity === 'tableTopicsSession') { $('session-scene').value = 'manual'; const seconds = (plan.estimatedMinutes || 20) * 60; $('topics-minutes').value = Math.floor(seconds/60); $('topics-seconds').value = Math.round(seconds%60); }
+  if (plan.activity === 'tableTopicsSession') { $('session-scene').value = plan.scene || 'manual'; const seconds = (plan.estimatedMinutes || 20) * 60; $('topics-minutes').value = Math.floor(seconds/60); $('topics-seconds').value = Math.round(seconds%60); }
   showCustomDuration();
   setError(plan.warning || ''); saveSettings(); render();
   $('start').scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -288,7 +283,7 @@ function renderQueue() {
   for (const plan of plans) {
     const row = document.createElement('div'); row.className = 'queue-row';
     const info = document.createElement('div'); const title = document.createElement('strong'); title.textContent = plan.activityLabel;
-    const meta = document.createElement('small'); meta.textContent = `${plan.speaker || '姓名待补'} · 原定 ${plan.estimatedMinutes ?? '待补'} 分钟 · ${plan.activity === 'tableTopicsSession' ? '多人发言 · 每人时间可设置' : PRESETS[plan.activity]?.title + '预设'}${plan.warning ? ' · 请调整时长' : ''}`;
+    const meta = document.createElement('small'); meta.textContent = `${plan.speaker || '姓名待补'} · 原定 ${plan.estimatedMinutes ?? '待补'} 分钟 · ${plan.activity === 'tableTopicsSession' ? `多人发言 · ${MULTI_SCENES[plan.scene]?.title || '每人时间可设置'}` : PRESETS[plan.activity]?.title + '预设'}${plan.warning ? ' · 请调整时长' : ''}`;
     info.append(title, meta);
     const button = document.createElement('button'); button.className = 'queue-load'; button.textContent = isPlanDone(plan) ? '已完成 · 再次载入' : '载入计时'; button.addEventListener('click',()=>loadPlan(plan));
     row.append(info, button); list.append(row);
@@ -297,9 +292,9 @@ function renderQueue() {
 function showImportPreview(raw) {
   try {
     importPreview = parseAgendaImport(raw);
-    $('import-status').textContent = `${importPreview.name} · ${importPreview.date || '日期待补'} · ${importPreview.tasks.length} 个环节。≤2分钟→即兴；>2且≤3分钟→点评；>3分钟→备稿。原定时长将保留。`;
+    $('import-status').textContent = `${importPreview.name} · ${importPreview.date || '日期待补'} · ${importPreview.tasks.length} 个环节。优先识别即兴演讲、嘉宾介绍和真情分享为多人发言；其余环节按时长匹配。原定时长将保留。`;
     const list = $('import-preview'); list.replaceChildren();
-    for (const task of importPreview.tasks) { const line = document.createElement('p'); line.textContent = `${task.activityLabel} · ${task.speaker || '姓名待补'} · ${task.estimatedMinutes ?? '待补'} 分钟 → ${task.activity === 'tableTopicsSession' ? '多人发言 · 每人时间可设置' : PRESETS[task.activity].title}${task.warning ? '（需调整）' : ''}`; list.append(line); }
+    for (const task of importPreview.tasks) { const line = document.createElement('p'); line.textContent = `${task.activityLabel} · ${task.speaker || '姓名待补'} · ${task.estimatedMinutes ?? '待补'} 分钟 → ${task.activity === 'tableTopicsSession' ? `多人发言 · ${MULTI_SCENES[task.scene]?.title || '每人时间可设置'}` : PRESETS[task.activity].title}${task.warning ? '（需调整）' : ''}`; list.append(line); }
     $('confirm-import').disabled = false;
   } catch(error) { importPreview = null; $('confirm-import').disabled = true; $('import-status').textContent = error.message; }
 }

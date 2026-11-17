@@ -4,6 +4,12 @@ export const PRESETS = Object.freeze({
   tableTopics: { title: '即兴演讲', green: 60, yellow: 90, red: 120 },
 });
 
+export const MULTI_SCENES = Object.freeze({
+  topics: { title:'即兴演讲', green:60, yellow:90, red:120 },
+  guests: { title:'嘉宾介绍', green:20, yellow:25, red:30 },
+  sharing: { title:'真情分享', green:40, yellow:50, red:60 },
+});
+
 export function validateThresholds({ green, yellow, red }) {
   const values = [green, yellow, red].map(Number);
   if (values.some(value => !Number.isFinite(value) || value <= 0) ||

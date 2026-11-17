@@ -33,3 +33,27 @@ test('自定义阈值必须递增', () => {
   assert.throws(() => validateThresholds({ green: 30, yellow: 20, red: 10 }));
   assert.throws(() => validateThresholds({ green: 0, yellow: 20, red: 30 }));
 });
+
+import { timingStatus, reportText, reportCsv, reportHtml } from './report.mjs';
+test('报告边界、转义及同一人多次记录', () => {
+  const task = { id:'1', speaker:'<张三>', title:'不展示题目', activity:'speech', thresholds:PRESETS.speech, result:{elapsedMs:300000} };
+  assert.equal(timingStatus(task).color, 'green');
+  assert.equal(timingStatus({...task,result:{elapsedMs:360000}}).color, 'yellow');
+  assert.equal(timingStatus({...task,result:{elapsedMs:420000}}).text, '红灯亮啦 · 刚好到点');
+  assert.match(timingStatus({...task,result:{elapsedMs:421000}}).text, /00:01/);
+  const meeting = { name:'测试会议',date:'2026-11-17' };
+  assert.equal(reportText(meeting,[task,task]).split('<张三>').length,3);
+  assert.ok(!reportText(meeting,[task]).includes('不展示题目'));
+  assert.match(reportHtml(meeting,[task]), /&lt;张三&gt;/);
+  assert.match(reportCsv(meeting,[{...task,speaker:'=SUM(A1)'}]), /'=SUM/);
+});
+test('即兴整场与个人计时相互独立', () => {
+  let now = 0;
+  const make = id => new Timer(makeTask({title:'即兴',activity:'tableTopics',meetingId:'meeting-1',speaker:id,thresholds:PRESETS.tableTopics},id),()=>now);
+  const whole = make('whole'); const person = make('person');
+  whole.start(); now = 10000; person.start(); now = 70000;
+  const saved = person.finish(); assert.equal(saved.result.elapsedMs,60000);
+  person.reset(); now = 80000; assert.equal(whole.seconds,80);
+  whole.pause(); now = 90000; assert.equal(whole.seconds,80);
+  assert.equal(saved.meetingId,'meeting-1'); assert.equal(saved.speaker,'person');
+});

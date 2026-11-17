@@ -29,6 +29,8 @@ export function makeTask(config, id = crypto.randomUUID()) {
   const thresholds = validateThresholds(config.thresholds);
   return {
     schemaVersion: 1, id, title: config.title.trim(), activity: config.activity,
+    speaker: config.speaker ?? '', meetingId: config.meetingId ?? null,
+    activityLabel: config.activityLabel ?? config.title.trim(),
     agendaSource: config.agendaSource ?? null,
     thresholds, startedAt: null, endedAt: null,
     result: null,

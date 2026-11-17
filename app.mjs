@@ -1,9 +1,9 @@
-import { PRESETS, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=9';
-import { timingStatus, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=9';
-import { parseAgendaImport, saveTimingRecord } from './agenda-adapter.mjs?v=9';
+import { PRESETS, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=10';
+import { timingStatus, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=10';
+import { parseAgendaImport, saveTimingRecord } from './agenda-adapter.mjs?v=10';
 
 const $ = id => document.getElementById(id);
-const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds'];
+const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
 const STORAGE = 'toastmasters-timer-settings-v1';
 const RECORDS = 'toastmasters-timer-records-v1';
 const labels = { neutral: '未到提示时间', green: '绿色提示', yellow: '黄色提示', red: '红色提示' };
@@ -75,8 +75,9 @@ function showCustomDuration() {
   const session = $('preset').value === 'tableTopicsSession';
   $('custom-duration').hidden = $('preset').value !== 'custom';
   $('topics-duration').hidden = !session;
-  document.querySelector('.thresholds').hidden = session;
-  document.querySelector('.duration-help').hidden = session;
+  document.querySelector('.thresholds').hidden = false;
+  $('threshold-title').textContent = session ? '每人提示牌时间' : '提示牌时间';
+  document.querySelector('.duration-help').hidden = false;
   $('segments').hidden = !session;
   $('topics-budget').hidden = !session;
 
@@ -105,6 +106,7 @@ for (const id of ['green','yellow','red']) {
     field.addEventListener('input', () => {
       try {
         $(id).value = timeInput(readParts(id));
+        if ($('preset').value === 'tableTopicsSession') $('session-scene').value = 'manual';
         if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。';
         setError(); saveSettings();
       } catch(error) { $(id).value = ''; setError(error.message); }
@@ -114,9 +116,19 @@ for (const id of ['green','yellow','red']) {
 }
 for (const button of document.querySelectorAll('[data-duration]')) button.addEventListener('click', () => {
   const id = button.dataset.duration;
-  try { setDuration(id, readParts(id) + Number(button.dataset.step)); if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。'; setError(); saveSettings(); } catch(error) { setError(error.message); }
+  try { setDuration(id, readParts(id) + Number(button.dataset.step)); if ($('preset').value === 'tableTopicsSession') $('session-scene').value = 'manual'; if ($('preset').value === 'custom') $('auto-rule').textContent = '已手动调整提示时间。修改总时长可重新自动计算。'; setError(); saveSettings(); } catch(error) { setError(error.message); }
 });
 for (const id of ['total-minutes','total-seconds']) $(id).addEventListener('input', applyCustomDuration);
+const scenes = {
+  topics: { title:'即兴演讲', green:60, yellow:90, red:120 },
+  guests: { title:'嘉宾介绍', green:20, yellow:25, red:30 },
+  sharing: { title:'真情分享', green:40, yellow:50, red:60 },
+};
+$('session-scene').addEventListener('change', () => {
+  const scene = scenes[$('session-scene').value];
+  if (scene) { for (const key of ['green','yellow','red']) setDuration(key,scene[key]); $('title').value = scene.title; }
+  setError(); saveSettings(); render();
+});
 function settings() { return Object.fromEntries(fields.map(id => [id, id === 'sound' ? $(id).checked : $(id).value])); }
 function saveSettings() { try { localStorage.setItem(STORAGE, JSON.stringify(settings())); } catch {} }
 function loadSettings() {
@@ -139,10 +151,10 @@ function config() {
   const targetSeconds = session ? readParts('topics') : null;
   if (session && targetSeconds <= 0) throw new Error('请填写大于 0 秒的即兴总时长。');
   return { targetSeconds, lightsEnabled: !session, title, activityLabel: title, speaker: $('speaker').value.trim(), meetingId: currentMeeting().id, activity: $('preset').value, agendaSource: activePlan?.agendaSource || null, plannedId: activePlan?.id || null, estimatedMinutes: activePlan?.estimatedMinutes ?? null,
-    thresholds: session ? { green:60, yellow:90, red:120 } : { green: parseTime($('green').value), yellow: parseTime($('yellow').value), red: parseTime($('red').value) } };
+    thresholds: { green: parseTime($('green').value), yellow: parseTime($('yellow').value), red: parseTime($('red').value) } };
 }
 function setError(message = '') { $('error').textContent = message; }
-function lockSettings(locked) { for (const id of ['preset', 'title', 'speaker', 'green', 'yellow', 'red','total-minutes','total-seconds','topics-minutes','topics-seconds']) $(id).disabled = locked; document.querySelectorAll('.duration-control input,.duration-control button').forEach(field => { field.disabled = locked; }); }
+function lockSettings(locked) { for (const id of ['preset', 'title', 'speaker', 'green', 'yellow', 'red','total-minutes','total-seconds','topics-minutes','topics-seconds','session-scene']) $(id).disabled = locked; document.querySelectorAll('.duration-control input,.duration-control button').forEach(field => { field.disabled = locked; }); }
 function playCue(color) {
   if (!$('sound').checked || color === 'neutral') return;
   try {
@@ -165,14 +177,15 @@ function render() {
   const { shown, color } = view;
   $('segments').hidden = !session;
   $('topics-budget').hidden = !session;
-  $('speaker-label').textContent = session ? '即兴主持人' : '发言人姓名';
-  $('start').textContent = session ? '开始即兴环节' : '开始本轮计时';
+  $('speaker-label').textContent = session ? '环节主持人' : '发言人姓名';
+  $('start').textContent = session ? '开始多人发言' : '开始本轮计时';
   $('next').textContent = session ? '下一环节' : '下一位';
   if (session) {
     let remaining = view.remaining;
     if (remaining === null) { try { remaining = readParts('topics'); } catch { remaining = 0; } }
+    $('topics-budget').classList.toggle('overdue', !!timer && remaining <= 0);
     $('topics-remaining').textContent = `${remaining < 0 ? '+' : ''}${formatTime(Math.ceil(Math.abs(remaining)))}`;
-    $('topics-budget-note').textContent = remaining < 0 ? '已超出总时长 · 总计时继续' : state === 'paused' ? '已暂停 · 总计时与分段同步暂停' : '总时长只倒计时，不变牌';
+    $('topics-budget-note').textContent = remaining <= 0 ? '环节已到时 · 提示牌仍跟随当前分段' : state === 'paused' ? '已暂停 · 总计时与分段同步暂停' : '环节到点仅此栏标红，不影响分段提示牌';
   }
 
   if (color !== lastColor) { playCue(color); lastColor = color; }
@@ -181,7 +194,7 @@ function render() {
   $('display-title').textContent = shown ? `${shown.task.speaker} · ${shown.task.activityLabel}` : $('title').value.trim();
   $('color-label').textContent = session && !segmentTimer ? '等待发言 · 不展示提示牌' : labels[color];
   $('status').textContent = { idle: '准备就绪', running: '正在计时', paused: '已暂停', finished: '本轮已结束' }[state];
-  $('display-state').textContent = session && !segmentTimer ? (state === 'finished' ? '即兴环节已结束' : '新增分段，为下一位发言人计时') : { idle: '准备开始', running: labels[color], paused: '已暂停', finished: '计时结束' }[state];
+  $('display-state').textContent = session && !segmentTimer ? (state === 'finished' ? '本环节已结束' : '新增分段，为下一位发言人计时') : { idle: '准备开始', running: labels[color], paused: '已暂停', finished: '计时结束' }[state];
   $('start').disabled = state !== 'idle';
   $('pause').disabled = !['running', 'paused'].includes(state);
   $('pause').textContent = state === 'paused' ? '继续' : '暂停';
@@ -246,10 +259,10 @@ $('add-segment').addEventListener('click', () => {
   if (timer?.state !== 'running' || timer.task.activity !== 'tableTopicsSession') return;
   if (segmentTimer && !saveSegment()) { timer.pause(); render(); return; }
   segmentCount += 1;
-  const task = makeTask({ ...timer.task, plannedId: null, title: timer.task.title, activity: 'tableTopics', targetSeconds:120, lightsEnabled:true,
+  const task = makeTask({ ...timer.task, plannedId: null, title: timer.task.title, activity: 'tableTopics', targetSeconds:timer.task.thresholds.red, lightsEnabled:true,
     activityLabel: `${timer.task.activityLabel} · 分段`,
     speaker: $('segment-name').value.trim() || `分段 ${segmentCount}`,
-    thresholds: PRESETS.tableTopics });
+    thresholds: timer.task.thresholds });
   task.parentTaskId = timer.task.id; task.segmentIndex = segmentCount;
   segmentTimer = new Timer(task); segmentTimer.start(); completedSegment = null;
   $('segment-name').value = ''; lastColor = 'neutral'; setError(); render();
@@ -262,7 +275,7 @@ function loadPlan(plan) {
   resetPerson(); activePlan = plan;
   $('preset').value = plan.activity; $('title').value = plan.activityLabel; $('speaker').value = plan.speaker;
   for (const key of ['green','yellow','red']) setDuration(key, plan.thresholds[key]);
-  if (plan.activity === 'tableTopicsSession') { const seconds = (plan.estimatedMinutes || 20) * 60; $('topics-minutes').value = Math.floor(seconds/60); $('topics-seconds').value = Math.round(seconds%60); }
+  if (plan.activity === 'tableTopicsSession') { $('session-scene').value = 'manual'; const seconds = (plan.estimatedMinutes || 20) * 60; $('topics-minutes').value = Math.floor(seconds/60); $('topics-seconds').value = Math.round(seconds%60); }
   showCustomDuration();
   setError(plan.warning || ''); saveSettings(); render();
   $('start').scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -275,7 +288,7 @@ function renderQueue() {
   for (const plan of plans) {
     const row = document.createElement('div'); row.className = 'queue-row';
     const info = document.createElement('div'); const title = document.createElement('strong'); title.textContent = plan.activityLabel;
-    const meta = document.createElement('small'); meta.textContent = `${plan.speaker || '姓名待补'} · 原定 ${plan.estimatedMinutes ?? '待补'} 分钟 · ${plan.activity === 'tableTopicsSession' ? '即兴环节 · 分段2分钟' : PRESETS[plan.activity]?.title + '预设'}${plan.warning ? ' · 请调整时长' : ''}`;
+    const meta = document.createElement('small'); meta.textContent = `${plan.speaker || '姓名待补'} · 原定 ${plan.estimatedMinutes ?? '待补'} 分钟 · ${plan.activity === 'tableTopicsSession' ? '多人发言 · 每人时间可设置' : PRESETS[plan.activity]?.title + '预设'}${plan.warning ? ' · 请调整时长' : ''}`;
     info.append(title, meta);
     const button = document.createElement('button'); button.className = 'queue-load'; button.textContent = isPlanDone(plan) ? '已完成 · 再次载入' : '载入计时'; button.addEventListener('click',()=>loadPlan(plan));
     row.append(info, button); list.append(row);
@@ -286,7 +299,7 @@ function showImportPreview(raw) {
     importPreview = parseAgendaImport(raw);
     $('import-status').textContent = `${importPreview.name} · ${importPreview.date || '日期待补'} · ${importPreview.tasks.length} 个环节。≤2分钟→即兴；>2且≤3分钟→点评；>3分钟→备稿。原定时长将保留。`;
     const list = $('import-preview'); list.replaceChildren();
-    for (const task of importPreview.tasks) { const line = document.createElement('p'); line.textContent = `${task.activityLabel} · ${task.speaker || '姓名待补'} · ${task.estimatedMinutes ?? '待补'} 分钟 → ${task.activity === 'tableTopicsSession' ? '即兴环节 · 分段2分钟' : PRESETS[task.activity].title}${task.warning ? '（需调整）' : ''}`; list.append(line); }
+    for (const task of importPreview.tasks) { const line = document.createElement('p'); line.textContent = `${task.activityLabel} · ${task.speaker || '姓名待补'} · ${task.estimatedMinutes ?? '待补'} 分钟 → ${task.activity === 'tableTopicsSession' ? '多人发言 · 每人时间可设置' : PRESETS[task.activity].title}${task.warning ? '（需调整）' : ''}`; list.append(line); }
     $('confirm-import').disabled = false;
   } catch(error) { importPreview = null; $('confirm-import').disabled = true; $('import-status').textContent = error.message; }
 }
@@ -327,7 +340,7 @@ $('confirm-import').addEventListener('click', () => {
 });
 $('preset').addEventListener('change', () => {
   const preset = PRESETS[$('preset').value];
-  if ($('preset').value === 'tableTopicsSession') { $('title').value = '即兴环节'; }
+  if ($('preset').value === 'tableTopicsSession') { $('session-scene').value = 'topics'; $('title').value = '即兴演讲'; for (const key of ['green','yellow','red']) setDuration(key, PRESETS.tableTopics[key]); }
   if (preset) {
     $('title').value = preset.title;
     for (const key of ['green', 'yellow', 'red']) setDuration(key, preset[key]);

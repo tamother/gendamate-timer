@@ -117,3 +117,16 @@ test('即兴环节总时长不变牌，仅当前2分钟分段变牌', () => {
   total.pause();now+=10000;assert.equal(presentationState(total).remaining,-20);
   assert.equal(timingStatus(total.finish()).color,'neutral');
 });
+
+test('总时长已超出时，嘉宾分段仍按自定义阈值独立变牌', () => {
+  let now=0;
+  const thresholds={green:20,yellow:25,red:30};
+  const session=new Timer(makeTask({title:'嘉宾介绍',activity:'tableTopicsSession',targetSeconds:1,lightsEnabled:false,thresholds},'guest-session'),()=>now);
+  const person=new Timer(makeTask({title:'嘉宾介绍 · 分段',activity:'tableTopics',thresholds},'guest'),()=>now);
+  session.start();person.start();now=20000;
+  assert.ok(presentationState(session,person).remaining<0);
+  assert.equal(presentationState(session,person).color,'green');
+  now=25000;assert.equal(presentationState(session,person).color,'yellow');
+  now=30000;assert.equal(presentationState(session,person).color,'red');
+  person.finish();assert.equal(presentationState(session,null,person).color,'neutral');
+});

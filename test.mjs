@@ -57,3 +57,14 @@ test('即兴整场与个人计时相互独立', () => {
   whole.pause(); now = 90000; assert.equal(whole.seconds,80);
   assert.equal(saved.meetingId,'meeting-1'); assert.equal(saved.speaker,'person');
 });
+
+import { reportCanvasData } from './report.mjs';
+test('长图数据保留全部记录，会议起止自动来自首轮和最后记录', () => {
+  const tasks = Array.from({length:40},(_,i)=>({id:String(i),speaker:`发言人${i}`,activity:'tableTopics',title:'不展示题目',thresholds:PRESETS.tableTopics,startedAt:'2026-11-17T10:00:00.000Z',endedAt:'2026-11-17T12:00:00.000Z',result:{elapsedMs:90000}}));
+  const result=reportCanvasData({name:'本场例会',date:'2026-11-17'},tasks);
+  assert.equal(result.rows.filter(r=>!r.heading).length,40);
+  assert.equal(result.rows.at(-1).name,'发言人39');
+  assert.equal(result.rows.at(-1).color,'yellow');
+  assert.ok(!JSON.stringify(result).includes('不展示题目'));
+  assert.ok(!result.span.includes('— —'));
+});

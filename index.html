@@ -6,13 +6,12 @@
   <meta name="theme-color" content="#151a24">
   <title>头马演讲计时器</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <main class="app">
     <header class="topbar"><div><h1>演讲计时器</h1><p>清晰提示每一段发言时间</p></div><span class="offline">可离线使用</span></header>
-    <section class="meeting-bar" aria-label="本场会议"><label>选择会议<select id="meeting-select"></select></label><label>会议名称<input id="meeting-name" maxlength="80"></label><label>日期<input id="meeting-date" type="date"></label><button id="new-meeting">新建会议</button></section>
-    <details class="stage-panel"><summary>即兴整场计时 · 与个人计时同时运行</summary><p class="hint">先开始整场，再依次记录每位发言人。“下一位”和个人重置均不影响整场。整场按目标时长的 80% / 90% / 100% 作为绿黄红阈值。</p><div class="stage-fields"><label>主持人<input id="stage-host" maxlength="60" placeholder="即兴主持"></label><label>整场目标（分钟）<input id="stage-minutes" type="number" min="1" max="180" value="20"></label></div><p><strong id="stage-time">00:00</strong> <span id="stage-status">整场未开始</span></p><div class="report-actions"><button id="stage-start">开始整场</button><button id="stage-pause" disabled>暂停整场</button><button id="stage-finish" disabled>结束整场并保存</button><button id="stage-reset">重置整场</button></div></details>
+    <section class="meeting-bar" aria-label="本场会议"><div class="meeting-heading"><h2>本场会议</h2><p>为每一次发言，留下一份时间记录。</p></div><label>历史会议<select id="meeting-select"></select></label><label>会议名称<input id="meeting-name" maxlength="80"></label><label>日期<input id="meeting-date" type="date"></label><button id="new-meeting">＋ 新建会议</button></section>
     <div class="layout">
       <section class="controls" aria-label="计时设置">
         <h2>设置本轮计时</h2>
@@ -26,14 +25,15 @@
       <section id="timer-panel" class="timer-panel" aria-label="计时器">
         <button id="exit-display" class="exit-display" hidden>退出指示牌</button><div class="panel-head"><span id="status">准备就绪</span><span id="color-label">未到提示时间</span></div>
         <div id="display" class="display neutral"><div id="display-title" class="display-title">备稿演讲</div><div id="digits" class="digits">00:00</div><div id="display-state" class="display-state">准备开始</div></div>
-        <div class="actions"><button id="start" class="primary">开始计时</button><button id="pause" disabled>暂停</button><button id="finish" disabled>结束并保存</button><button id="reset">重置</button><button id="next" disabled>下一位</button></div>
+        <div class="actions"><button id="start" class="primary">开始本轮计时</button><button id="pause" disabled>暂停</button><button id="finish" disabled>结束并保存</button><button id="reset">重置</button><button id="next" disabled>下一位</button></div>
+        <div class="segments"><div class="segment-heading"><h3>分段计时</h3><span id="total-time">本轮累计 00:00</span></div><div class="segment-input"><input id="segment-name" aria-label="分段发言人" maxlength="60" placeholder="下一位发言人（可稍后修正）"><button id="add-segment" disabled>＋ 新增分段</button><button id="end-segment" disabled>结束分段</button></div><p id="segment-hint" class="hint">开始本轮计时后，可逐位新增分段。总用时持续累计。</p></div>
         <div class="view-options"><span>观众展示</span><button id="number-mode" class="selected" aria-pressed="true">颜色 + 数字</button><button id="color-mode" aria-pressed="false">纯色</button><button id="fullscreen">手机指示牌 / 全屏</button></div>
       </section>
     </div>
-    <section class="records" id="report"><div class="records-head"><h2>本场计时报告</h2><div class="report-actions"><button id="copy-report">复制报告</button><button id="csv-report">导出 CSV</button><button id="html-report">导出彩色报告</button><button id="print-report">打印 / PDF</button><button id="export">备份 JSON</button></div></div><p id="report-summary" class="hint"></p><p id="report-message" role="status"></p><div id="records-list" class="records-list">暂无记录</div><textarea id="copy-fallback" aria-label="报告文本（可长按复制）" hidden readonly></textarea></section>
+    <section class="records" id="report"><div class="records-head"><h2>本场计时报告</h2><div class="report-actions"><button id="copy-report">复制报告</button><button id="csv-report">导出 CSV</button><button id="html-report">预览报告 / 长图</button><button id="print-report">打印 / PDF</button><button id="export">备份 JSON</button></div></div><p id="report-summary" class="hint"></p><p id="report-message" role="status"></p><div id="records-list" class="records-list">暂无记录</div><textarea id="copy-fallback" aria-label="报告文本（可长按复制）" hidden readonly></textarea></section>
     <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><p class="hint">用时和阈值保留本轮原始记录。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
     <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
   </main>
-  <script type="module" src="app.mjs"></script>
+  <script type="module" src="app.mjs?v=6"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-import { PRESETS, Timer, makeTask, formatTime } from './timer-core.mjs';
-import { timingStatus, activityName, groupRecords, reportText, reportCsv, reportHtml } from './report.mjs';
-import { saveTimingRecord } from './agenda-adapter.mjs';
+import { PRESETS, Timer, makeTask, formatTime } from './timer-core.mjs?v=6';
+import { timingStatus, activityName, groupRecords, reportText, reportCsv } from './report.mjs?v=6';
+import { saveTimingRecord } from './agenda-adapter.mjs?v=6';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound'];
@@ -27,7 +27,9 @@ function currentMeeting() { return data.meetings.find(m => m.id === data.activeI
 function persist(next) { localStorage.setItem(DATA, JSON.stringify(next)); data = next; }
 function changeData(change) { const next = structuredClone(data); change(next); persist(next); }
 function storeTask(task) { changeData(next => { const meeting = next.meetings.find(m => m.id === task.meetingId); if (!meeting) throw new Error('会议不存在'); if (!meeting.records.some(t => t.id === task.id)) meeting.records.push(task); }); }
-let stageTimer = null;
+let segmentTimer = null;
+let segmentCount = 0;
+let completedSegment = null;
 let editId = null;
 let timer = null;
 let lastColor = 'neutral';
@@ -92,11 +94,12 @@ function playCue(color) {
 }
 function render() {
   const state = timer?.state ?? 'idle';
-  const color = timer?.color ?? 'neutral';
+  const shown = segmentTimer || completedSegment || timer;
+  const color = shown?.color ?? 'neutral';
   if (color !== lastColor) { playCue(color); lastColor = color; }
   $('display').className = `display ${color}${mode === 'color' ? ' pure' : ''}`;
-  $('digits').textContent = formatTime(timer?.seconds ?? 0);
-  $('display-title').textContent = timer ? `${timer.task.speaker} · ${timer.task.activityLabel}` : $('title').value.trim();
+  $('digits').textContent = formatTime(shown?.seconds ?? 0);
+  $('display-title').textContent = shown ? `${shown.task.speaker} · ${shown.task.activityLabel}` : $('title').value.trim();
   $('color-label').textContent = labels[color];
   $('status').textContent = { idle: '准备就绪', running: '正在计时', paused: '已暂停', finished: '本轮已结束' }[state];
   $('display-state').textContent = { idle: '准备开始', running: labels[color], paused: '已暂停', finished: '计时结束' }[state];
@@ -105,17 +108,13 @@ function render() {
   $('pause').textContent = state === 'paused' ? '继续' : '暂停';
   $('finish').disabled = !['running', 'paused'].includes(state);
   $('next').disabled = state !== 'finished';
-  const busy = [timer, stageTimer].some(t => ['running', 'paused'].includes(t?.state));
+  const busy = ['running', 'paused'].includes(state);
   for (const id of ['meeting-select', 'meeting-name', 'meeting-date', 'new-meeting']) $(id).disabled = busy;
-  const stageState = stageTimer?.state || 'idle';
-  $('stage-time').textContent = formatTime(stageTimer?.seconds || 0);
-  $('stage-time').className = `result-time ${stageTimer?.color || 'neutral'}`;
-  $('stage-status').textContent = {idle:'整场未开始', running:'整场计时中', paused:'整场已暂停', finished:'整场已保存'}[stageState];
-  $('stage-start').disabled = stageState !== 'idle';
-  $('stage-pause').disabled = !['running','paused'].includes(stageState);
-  $('stage-pause').textContent = stageState === 'paused' ? '继续整场' : '暂停整场';
-  $('stage-finish').disabled = !['running','paused'].includes(stageState);
-  for (const id of ['stage-minutes','stage-host']) $(id).disabled = stageState !== 'idle';
+  $('add-segment').disabled = state !== 'running';
+  $('end-segment').disabled = !segmentTimer || !['running', 'paused'].includes(state);
+  $('total-time').textContent = `本轮累计 ${formatTime(timer?.seconds ?? 0)}`;
+  $('segment-hint').textContent = segmentTimer ? `第 ${segmentCount} 段 · ${segmentTimer.task.speaker}。新增分段会保存当前段并开始下一段。` : segmentCount ? `已记录 ${segmentCount} 个分段。可继续新增，总计时仍在累计。` : '开始本轮计时后，可逐位新增分段。总用时持续累计。';
+
 }
 function records() { return currentMeeting().records; }
 function renderMeetings() {
@@ -128,7 +127,7 @@ function renderMeetings() {
 function renderRecords() {
   const list = $('records-list'); list.replaceChildren();
   const items = records();
-  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>t.activity !== 'tableTopicsSession').length} 次个人发言，${items.filter(t=>t.activity === 'tableTopicsSession').length} 条即兴整场记录。状态仅描述灯色，不判定比赛资格。`;
+  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态仅描述灯色，不判定比赛资格。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
     const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
@@ -148,25 +147,33 @@ function renderRecords() {
     }
   }
 }
-function resetPerson() { timer = null; lastColor = 'neutral'; lockSettings(false); setError(); render(); }
+function resetPerson() { segmentTimer = null; completedSegment = null; segmentCount = 0; timer = null; lastColor = 'neutral'; lockSettings(false); setError(); render(); }
 $('next').addEventListener('click', () => { resetPerson(); $('speaker').value = ''; $('speaker').focus(); });
-$('meeting-select').addEventListener('change', () => { try { changeData(next => { next.activeId = $('meeting-select').value; }); resetPerson(); stageTimer = null; renderMeetings(); renderRecords(); render(); } catch { setError('切换会议未保存。'); } });
-$('new-meeting').addEventListener('click', () => { try { const meeting = newMeeting(); changeData(next => { next.meetings.push(meeting); next.activeId = meeting.id; }); resetPerson(); stageTimer = null; renderMeetings(); renderRecords(); render(); $('meeting-name').focus(); } catch { setError('无法保存新会议，请检查浏览器存储。'); } });
+$('meeting-select').addEventListener('change', () => { try { changeData(next => { next.activeId = $('meeting-select').value; }); resetPerson(); renderMeetings(); renderRecords(); render(); } catch { setError('切换会议未保存。'); } });
+$('new-meeting').addEventListener('click', () => { try { const meeting = newMeeting(); changeData(next => { next.meetings.push(meeting); next.activeId = meeting.id; }); resetPerson(); renderMeetings(); renderRecords(); render(); $('meeting-name').focus(); } catch { setError('无法保存新会议，请检查浏览器存储。'); } });
 for (const id of ['meeting-name','meeting-date']) $(id).addEventListener('change', () => { try { if (!$('meeting-name').value.trim() || !$('meeting-date').value) throw new Error(); changeData(next => { const m = next.meetings.find(m => m.id === data.activeId); m.name = $('meeting-name').value.trim(); m.date = $('meeting-date').value; }); renderMeetings(); renderRecords(); } catch { setError('会议名称和日期不能为空，且需要可用的本地存储。'); } });
 $('cancel-edit').addEventListener('click', () => $('edit-record').close());
 $('edit-form').addEventListener('submit', event => { event.preventDefault(); try { const speaker = $('edit-speaker').value.trim(); const activity = $('edit-activity').value.trim(); if (!speaker || !activity) throw new Error(); changeData(next => { const task = next.meetings.find(m => m.id === data.activeId).records.find(t => t.id === editId); task.speaker = speaker; task.activityLabel = activity; }); $('edit-record').close(); renderRecords(); } catch { $('edit-error').textContent = '请填写姓名和环节，并确认本地存储可用。'; } });
-$('stage-start').addEventListener('click', () => {
-  try {
-    const minutes = Number($('stage-minutes').value);
-    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) throw new Error('整场时长应为 1–180 分钟。');
-    const red = minutes * 60;
-    stageTimer = new Timer(makeTask({ title: '即兴整场', activityLabel: '即兴整场', activity:'tableTopicsSession', speaker: $('stage-host').value.trim() || '即兴主持', meetingId:currentMeeting().id, thresholds: { green: red * .8, yellow: red * .9, red } }));
-    stageTimer.start(); setError(); render();
-  } catch (error) { setError(error.message); }
+function saveSegment() {
+  if (!segmentTimer) return true;
+  const task = segmentTimer.finish();
+  if (!task) return false;
+  try { storeTask(task); completedSegment = segmentTimer; segmentTimer = null; renderRecords(); return true; }
+  catch { segmentTimer.state = 'paused'; setError('分段保存失败，请检查存储后重试。'); return false; }
+}
+$('add-segment').addEventListener('click', () => {
+  if (timer?.state !== 'running') return;
+  if (segmentTimer && !saveSegment()) { timer.pause(); render(); return; }
+  segmentCount += 1;
+  const task = makeTask({ ...timer.task, title: timer.task.title, activity: timer.task.activity,
+    activityLabel: `${timer.task.activityLabel} · 分段`,
+    speaker: $('segment-name').value.trim() || `分段 ${segmentCount}`,
+    thresholds: timer.task.activity === 'tableTopics' ? PRESETS.tableTopics : timer.task.thresholds });
+  task.parentTaskId = timer.task.id; task.segmentIndex = segmentCount;
+  segmentTimer = new Timer(task); segmentTimer.start(); completedSegment = null;
+  $('segment-name').value = ''; lastColor = 'neutral'; setError(); render();
 });
-$('stage-pause').addEventListener('click', () => { if (stageTimer?.state === 'running') stageTimer.pause(); else stageTimer?.resume(); render(); });
-$('stage-finish').addEventListener('click', () => { const task = stageTimer?.finish(); if (!task) return; try { storeTask(task); renderRecords(); } catch { stageTimer.state = 'paused'; setError('整场保存失败，可重试结束保存。'); } render(); });
-$('stage-reset').addEventListener('click', () => { if (stageTimer && stageTimer.state !== 'finished' && !confirm('重置将丢弃当前整场计时，个人记录会保留。')) return; stageTimer = null; render(); });
+$('end-segment').addEventListener('click', () => { if (!saveSegment()) timer.pause(); render(); });
 $('preset').addEventListener('change', () => {
   const preset = PRESETS[$('preset').value];
   if (preset) {
@@ -177,18 +184,20 @@ $('preset').addEventListener('change', () => {
 });
 for (const id of fields) $(id).addEventListener('input', () => { saveSettings(); setError(); if (id === 'title') render(); });
 $('start').addEventListener('click', () => {
-  try { timer = new Timer(makeTask(config())); timer.start(); lockSettings(true); saveSettings(); setError(); render(); }
+  try { const task = makeTask(config()); if (!currentMeeting().startedAt) changeData(next => { next.meetings.find(m => m.id === data.activeId).startedAt = new Date().toISOString(); }); timer = new Timer(task); timer.start(); lockSettings(true); saveSettings(); setError(); render(); }
   catch (error) { setError(error.message); }
 });
-$('pause').addEventListener('click', () => { if (timer?.state === 'running') timer.pause(); else timer?.resume(); render(); });
+$('pause').addEventListener('click', () => { if (timer?.state === 'running') { timer.pause(); segmentTimer?.pause(); } else { timer?.resume(); segmentTimer?.resume(); } render(); });
 $('finish').addEventListener('click', async () => {
+  if (segmentTimer && !saveSegment()) { timer.pause(); render(); return; }
   const task = timer?.finish(); if (!task) return;
+  if (segmentCount) { task.activity = 'sessionTotal'; task.activityLabel += ' · 总用时'; task.segmentCount = segmentCount; }
   try { storeTask(task); }
   catch { timer.state = 'paused'; setError('保存失败，请导出已有记录并检查存储，再重试结束保存。'); render(); return; }
   try { await saveTimingRecord(task); } catch { /* A future adapter can report sync failure here. */ }
   render(); renderRecords();
 });
-$('reset').addEventListener('click', () => { timer = null; lastColor = 'neutral'; lockSettings(false); setError(); render(); });
+$('reset').addEventListener('click', () => { if (timer && timer.state !== 'finished' && !confirm('重置会丢弃当前未保存的计时，已保存的分段仍保留。')) return; resetPerson(); });
 function setMode(next) {
   mode = next;
   for (const [id, value] of [['number-mode', 'number'], ['color-mode', 'color']]) {
@@ -230,8 +239,18 @@ function download(content, type, extension) {
 }
 $('copy-report').addEventListener('click', async () => { const text = reportText(currentMeeting(), records()); try { await navigator.clipboard.writeText(text); $('report-message').textContent = '报告已复制，可粘贴到微信群。'; } catch { $('copy-fallback').hidden = false; $('copy-fallback').value = text; $('copy-fallback').focus(); $('copy-fallback').select(); $('report-message').textContent = '请长按或选择下面的文字复制。'; } });
 $('csv-report').addEventListener('click', () => download(reportCsv(currentMeeting(), records()), 'text/csv;charset=utf-8', 'csv'));
-$('html-report').addEventListener('click', () => download(reportHtml(currentMeeting(), records()), 'text/html;charset=utf-8', 'html'));
+$('html-report').addEventListener('click', () => {
+  try {
+    const id = crypto.randomUUID();
+    localStorage.setItem('timer-report-preview', JSON.stringify({ id, meeting: currentMeeting(), records: records() }));
+    const url = `./report.html?id=${encodeURIComponent(id)}`;
+    if (!window.open(url, '_blank')) {
+      $('report-message').textContent = '请点击打开报告：';
+      const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.textContent = '打开报告'; $('report-message').append(link);
+    }
+  } catch { $('report-message').textContent = '无法生成预览，请检查浏览器存储后重试。'; }
+});
 $('print-report').addEventListener('click', () => window.print());
 loadSettings(); renderMeetings(); renderRecords(); render();
 setInterval(render, 100);
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});

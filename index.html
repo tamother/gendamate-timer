@@ -6,12 +6,13 @@
   <meta name="theme-color" content="#151a24">
   <title>头马演讲计时器</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <main class="app">
     <header class="topbar"><div><h1>演讲计时器</h1><p>清晰提示每一段发言时间</p></div><span class="offline">可离线使用</span></header>
-    <section class="meeting-bar" aria-label="本场会议"><div class="meeting-heading"><h2>本场会议</h2><p>为每一次发言，留下一份时间记录。</p></div><label>历史会议<select id="meeting-select"></select></label><label>会议名称<input id="meeting-name" maxlength="80"></label><label>日期<input id="meeting-date" type="date"></label><button id="new-meeting">＋ 新建会议</button></section>
+    <section class="meeting-bar" aria-label="本场会议"><div class="meeting-heading"><h2>本场会议</h2><p>为每一次发言，留下一份时间记录。</p><button id="import-agenda">从 AgendaMate 导入</button></div><label>历史会议<select id="meeting-select"></select></label><label>会议名称<input id="meeting-name" maxlength="80"></label><label>日期<input id="meeting-date" type="date"></label><button id="new-meeting">＋ 新建会议</button></section>
+    <details id="agenda-queue" class="agenda-queue" hidden><summary>待计时议程 <span id="queue-count"></span></summary><div id="queue-list"></div></details>
     <div class="layout">
       <section class="controls" aria-label="计时设置">
         <h2>设置本轮计时</h2>
@@ -31,9 +32,10 @@
       </section>
     </div>
     <section class="records" id="report"><div class="records-head"><h2>本场计时报告</h2><div class="report-actions"><button id="copy-report">复制报告</button><button id="csv-report">导出 CSV</button><button id="html-report">预览报告 / 长图</button><button id="print-report">打印 / PDF</button><button id="export">备份 JSON</button></div></div><p id="report-summary" class="hint"></p><p id="report-message" role="status"></p><div id="records-list" class="records-list">暂无记录</div><textarea id="copy-fallback" aria-label="报告文本（可长按复制）" hidden readonly></textarea></section>
+    <dialog id="import-dialog"><h2>从 AgendaMate 导入议程</h2><p class="hint">在新窗口登录后，选择俱乐部当前已保存的议程，再发送到此处。姓名、环节和原定时长会进入待计时列表。</p><div class="report-actions"><button id="open-agenda">打开 AgendaMate</button><button id="close-import">关闭</button></div><p class="hint">也可导入 AgendaMate 计时数据 JSON 文件。</p><input id="agenda-file" type="file" accept=".json,application/json" aria-label="导入议程 JSON"><p id="import-status" role="status"></p><div id="import-preview"></div><button id="confirm-import" disabled>确认导入</button></dialog>
     <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><p class="hint">用时和阈值保留本轮原始记录。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
     <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
   </main>
-  <script type="module" src="app.mjs?v=6"></script>
+  <script type="module" src="app.mjs?v=7"></script>
 </body>
 </html>

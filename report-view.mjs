@@ -1,4 +1,4 @@
-import { reportCanvasData } from './report.mjs?v=6';
+import { reportCanvasData } from './report.mjs?v=7';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}
@@ -28,5 +28,5 @@ ctx.font='600 34px system-ui,sans-serif';text(fit(row.name,600),85,y+35,34,'#203
 text('标准 '+row.range,85,y+84,23,'#748477');text(row.time,730,y+38,42,colors[row.color],700,270);
 text(row.text,560,y+86,20,colors[row.color],450,430);y+=150;}
 text('每一分钟，都值得被认真记录。',70,canvas.height-130,26,'#658675',500);
-text('状态仅描述提示灯时间，不判定比赛资格。',70,canvas.height-78,21,'#8b988d');
+text('状态仅描述提示灯时间，供例会计时参考。',70,canvas.height-78,21,'#8b988d');
 document.getElementById('download').onclick=()=>canvas.toBlob(blob=>{if(!blob){document.getElementById('message').textContent='图片生成失败，请尝试浏览器截图。';return;}const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='计时报告-'+data.date+'.png';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);},'image/png');

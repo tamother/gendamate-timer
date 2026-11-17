@@ -31,6 +31,7 @@ export function makeTask(config, id = crypto.randomUUID()) {
     schemaVersion: 1, id, title: config.title.trim(), activity: config.activity,
     speaker: config.speaker ?? '', meetingId: config.meetingId ?? null,
     activityLabel: config.activityLabel ?? config.title.trim(),
+    plannedId: config.plannedId ?? null, estimatedMinutes: config.estimatedMinutes ?? null,
     agendaSource: config.agendaSource ?? null,
     thresholds, startedAt: null, endedAt: null,
     result: null,

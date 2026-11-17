@@ -1,4 +1,4 @@
-import { formatTime, PRESETS } from './timer-core.mjs?v=6';
+import { formatTime, PRESETS } from './timer-core.mjs?v=7';
 
 export function timingStatus(task) {
   const seconds = (task.result?.elapsedMs ?? 0) / 1000;
@@ -25,7 +25,7 @@ export function reportText(meeting, records) {
     for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}）`);
     lines.push('');
   }
-  lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。状态仅描述提示灯时间，不判定比赛资格。`);
+  lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。状态仅描述提示灯时间，供例会计时参考。`);
   return lines.join('\n');
 }
 function csvCell(value) {
@@ -49,7 +49,7 @@ export function reportHtml(meeting, records) {
     }
     body += '</tbody></table>';
   }
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#926500}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>状态仅描述提示灯时间，不判定比赛资格。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#926500}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>状态仅描述提示灯时间，供例会计时参考。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
 }
 
 export function reportCanvasData(meeting, records) {

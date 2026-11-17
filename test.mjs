@@ -68,3 +68,25 @@ test('长图数据保留全部记录，会议起止自动来自首轮和最后�
   assert.ok(!JSON.stringify(result).includes('不展示题目'));
   assert.ok(!result.span.includes('— —'));
 });
+
+import { parseAgendaImport, presetForMinutes } from './agenda-adapter.mjs';
+test('AgendaMate 真实字段导入全部环节，按原定时长匹配预设', () => {
+  const imported=parseAgendaImport({clubId:'club-1',clubName:'PRO',meeting:{mDate:'2026-11-17',mNo:'第793期',theme:'例会',agenda:[{id:'a',i:'Call to Order',n:'Linda',d:'2'},{id:'b',i:'Individual Evaluation',n:'Nora',d:3},{id:'c',i:'Prepared Speech',n:'Smile',d:7},{id:'d',i:'Table Topics Session',n:'Jae',d:20},{id:'e',i:'Closing Remarks',n:'President',d:2}]}});
+  assert.equal(imported.tasks.length,5);
+  assert.deepEqual(imported.tasks.map(t=>t.activity),['tableTopics','evaluation','speech','speech','tableTopics']);
+  assert.equal(imported.tasks[3].estimatedMinutes,20);
+  assert.equal(imported.tasks[0].speaker,'Linda');
+  assert.equal(imported.tasks[0].agendaSource.clubId,'club-1');
+  assert.equal(imported.tasks[0].agendaSource.itemId,'a');
+  assert.equal(imported.date,'2026-11-17');
+  assert.deepEqual([1,2,2.5,3,3.1,7].map(presetForMinutes),['tableTopics','tableTopics','evaluation','evaluation','speech','speech']);
+});
+test('缺失字段不猜测，重复导入的来源标识稳定', () => {
+  const input={meeting:{agenda:[{i:'未知时长',d:'随意',n:''}]}};
+  const a=parseAgendaImport(input), b=parseAgendaImport(JSON.stringify(input));
+  assert.equal(a.tasks[0].estimatedMinutes,null);
+  assert.ok(a.tasks[0].warning);
+  assert.equal(a.tasks[0].id,b.tasks[0].id);
+  assert.throws(()=>parseAgendaImport({meeting:{agenda:[]}}));
+  assert.throws(()=>parseAgendaImport('not json'));
+});

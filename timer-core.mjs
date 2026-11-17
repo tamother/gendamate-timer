@@ -110,3 +110,9 @@ export class Timer {
     this.task.result = null;
   }
 }
+
+export function nextSpeakerName(records = []) {
+  const people = records.filter(task => !['tableTopicsSession','sessionTotal'].includes(task.activity));
+  const largest = Math.max(0, ...people.map(task => Number(/^发言人\s+(\d+)$/.exec(task.speaker || '')?.[1] || 0)));
+  return `发言人 ${String(Math.max(people.length,largest)+1).padStart(2,'0')}`;
+}

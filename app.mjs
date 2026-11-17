@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=11';
-import { timingStatus, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=11';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=11';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=12';
+import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=12';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=12';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -36,6 +36,8 @@ let agendaPopup = null;
 let importNonce = null;
 let editId = null;
 let timer = null;
+let awaitingNext = false;
+let lastSavedNote = "";
 let lastColor = 'neutral';
 let mode = 'number';
 let audioContext = null;
@@ -141,15 +143,14 @@ function config() {
   if ($('preset').value === 'custom' && readParts('total') <= 0) throw new Error('请填写大于 0 秒的总时长。');
   const title = $('title').value.trim();
   if (!title) throw new Error('请填写标题。');
-  if (!$('speaker').value.trim()) throw new Error('请填写发言人姓名。');
   const session = $('preset').value === 'tableTopicsSession';
   const targetSeconds = session ? readParts('topics') : null;
   if (session && targetSeconds <= 0) throw new Error('请填写大于 0 秒的即兴总时长。');
-  return { targetSeconds, lightsEnabled: !session, title, activityLabel: title, speaker: $('speaker').value.trim(), meetingId: currentMeeting().id, activity: $('preset').value, agendaSource: activePlan?.agendaSource || null, plannedId: activePlan?.id || null, estimatedMinutes: activePlan?.estimatedMinutes ?? null,
+  return { targetSeconds, lightsEnabled: !session, title, activityLabel: title, speaker: $('speaker').value.trim() || nextSpeakerName(records()), meetingId: currentMeeting().id, activity: $('preset').value, agendaSource: activePlan?.agendaSource || null, plannedId: activePlan?.id || null, estimatedMinutes: activePlan?.estimatedMinutes ?? null,
     thresholds: { green: parseTime($('green').value), yellow: parseTime($('yellow').value), red: parseTime($('red').value) } };
 }
 function setError(message = '') { $('error').textContent = message; }
-function lockSettings(locked) { for (const id of ['preset', 'title', 'speaker', 'green', 'yellow', 'red','total-minutes','total-seconds','topics-minutes','topics-seconds','session-scene']) $(id).disabled = locked; document.querySelectorAll('.duration-control input,.duration-control button').forEach(field => { field.disabled = locked; }); }
+function lockSettings(locked) { for (const id of ['preset', 'title', 'green', 'yellow', 'red','total-minutes','total-seconds','topics-minutes','topics-seconds','session-scene']) $(id).disabled = locked; document.querySelectorAll('.duration-control input,.duration-control button').forEach(field => { field.disabled = locked; }); }
 function playCue(color) {
   if (!$('sound').checked || color === 'neutral') return;
   try {
@@ -173,7 +174,19 @@ function render() {
   $('segments').hidden = !session;
   $('topics-budget').hidden = !session;
   $('speaker-label').textContent = session ? '环节主持人' : '发言人姓名';
-  $('start').textContent = session ? '开始多人发言' : '开始本轮计时';
+  $('start').textContent = awaitingNext ? (session ? '开始下一环节' : '开始下一位') : session ? '开始多人发言' : '开始本轮计时';
+  const busyNow = ['running','paused'].includes(state);
+  $('quick-types').hidden = state !== 'idle';
+  $('live-speaker-label').hidden = session;
+  $('quick-heading').textContent = busyNow ? '当前发言人' : awaitingNext ? '等待下一位' : '快速开始';
+  $('quick-note').textContent = busyNow ? '可随时补填姓名，不影响计时。' : lastSavedNote || '选择类型后即可开始，无需先填写姓名。';
+  document.querySelectorAll('[data-quick]').forEach(button => {
+    const scene = button.dataset.quick;
+    const selected = MULTI_SCENES[scene] ? session && $('session-scene').value === scene : !session && $('preset').value === scene;
+    button.setAttribute('aria-pressed',String(selected));
+  });
+  $('next').hidden = !(currentMeeting().plannedTasks || []).length;
+  $('add-segment').textContent = segmentTimer ? '保存并开始下一位' : segmentCount ? '开始下一位' : '开始第一位';
   $('next').textContent = session ? '下一环节' : '下一位';
   if (session) {
     let remaining = view.remaining;
@@ -188,8 +201,8 @@ function render() {
   $('digits').textContent = session && !segmentTimer ? '— : —' : formatTime(view.seconds ?? 0);
   $('display-title').textContent = shown ? `${shown.task.speaker} · ${shown.task.activityLabel}` : $('title').value.trim();
   $('color-label').textContent = session && !segmentTimer ? '等待发言 · 不展示提示牌' : labels[color];
-  $('status').textContent = { idle: '准备就绪', running: '正在计时', paused: '已暂停', finished: '本轮已结束' }[state];
-  $('display-state').textContent = session && !segmentTimer ? (state === 'finished' ? '本环节已结束' : '新增分段，为下一位发言人计时') : { idle: '准备开始', running: labels[color], paused: '已暂停', finished: '计时结束' }[state];
+  $('status').textContent = awaitingNext && state === 'idle' ? '等待下一位 · 串场不计时' : { idle: '准备就绪', running: '正在计时', paused: '已暂停', finished: '本轮已结束' }[state];
+  $('display-state').textContent = awaitingNext && state === 'idle' ? '上一轮已保存 · 等待开始' : session && !segmentTimer ? (state === 'finished' ? '本环节已结束' : '新增分段，为下一位发言人计时') : { idle: '准备开始', running: labels[color], paused: '已暂停', finished: '计时结束' }[state];
   $('start').disabled = state !== 'idle';
   $('pause').disabled = !['running', 'paused'].includes(state);
   $('pause').textContent = state === 'paused' ? '继续' : '暂停';
@@ -216,7 +229,7 @@ function renderRecords() {
   renderQueue();
   const list = $('records-list'); list.replaceChildren();
   const items = records();
-  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态仅描述灯色，供例会计时参考。`;
+  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态默认按灯色判断，可手动修正。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
     const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
@@ -230,19 +243,19 @@ function renderRecords() {
       const description = document.createElement('small'); description.textContent = status.text;
       result.append(time, description); info.append(title, range);
       const actions = document.createElement('div'); actions.className = 'record-actions';
-      const edit = document.createElement('button'); edit.textContent = '修正'; edit.addEventListener('click', () => { editId = task.id; $('edit-speaker').value = task.speaker || ''; $('edit-activity').value = activityName(task); $('edit-error').textContent = ''; $('edit-record').showModal(); });
+      const edit = document.createElement('button'); edit.textContent = '修正'; edit.addEventListener('click', () => { editId = task.id; $('edit-speaker').value = task.speaker || ''; $('edit-activity').value = activityName(task); document.querySelectorAll('[name="record-status"]').forEach(input => { input.checked = input.value === (Object.hasOwn(STATUS_OPTIONS,task.statusOverride) ? task.statusOverride : 'auto'); }); $('edit-error').textContent = ''; $('edit-record').showModal(); });
       const remove = document.createElement('button'); remove.textContent = '删除'; remove.addEventListener('click', () => { if (!confirm(`删除 ${task.speaker || '待补姓名'} 的这条记录？`)) return; try { changeData(next => { const meeting = next.meetings.find(m => m.id === data.activeId); meeting.records = meeting.records.filter(t => t.id !== task.id); }); renderRecords(); } catch { $('report-message').textContent = '删除未保存，请检查浏览器存储。'; } });
       actions.append(edit, remove); row.append(info, result, actions); list.append(row);
     }
   }
 }
-function resetPerson() { activePlan = null; segmentTimer = null; completedSegment = null; segmentCount = 0; timer = null; lastColor = 'neutral'; lockSettings(false); setError(); render(); }
-$('next').addEventListener('click', () => { resetPerson(); const next = (currentMeeting().plannedTasks || []).find(t => !isPlanDone(t)); if (next) loadPlan(next); else { $('speaker').value = ''; $('speaker').focus(); } });
+function resetPerson() { awaitingNext = false; lastSavedNote = ''; activePlan = null; segmentTimer = null; completedSegment = null; segmentCount = 0; timer = null; lastColor = 'neutral'; lockSettings(false); setError(); render(); }
+$('next').addEventListener('click', () => { resetPerson(); $('live-speaker').value = ''; const next = (currentMeeting().plannedTasks || []).find(t => !isPlanDone(t)); if (next) loadPlan(next); else { $('speaker').value = ''; $('live-speaker').value = ''; render(); } });
 $('meeting-select').addEventListener('change', () => { try { changeData(next => { next.activeId = $('meeting-select').value; }); resetPerson(); renderMeetings(); renderRecords(); render(); } catch { setError('切换会议未保存。'); } });
 $('new-meeting').addEventListener('click', () => { try { const meeting = newMeeting(); changeData(next => { next.meetings.push(meeting); next.activeId = meeting.id; }); resetPerson(); renderMeetings(); renderRecords(); render(); $('meeting-name').focus(); } catch { setError('无法保存新会议，请检查浏览器存储。'); } });
 for (const id of ['meeting-name','meeting-date']) $(id).addEventListener('change', () => { try { if (!$('meeting-name').value.trim() || !$('meeting-date').value) throw new Error(); changeData(next => { const m = next.meetings.find(m => m.id === data.activeId); m.name = $('meeting-name').value.trim(); m.date = $('meeting-date').value; }); renderMeetings(); renderRecords(); } catch { setError('会议名称和日期不能为空，且需要可用的本地存储。'); } });
 $('cancel-edit').addEventListener('click', () => $('edit-record').close());
-$('edit-form').addEventListener('submit', event => { event.preventDefault(); try { const speaker = $('edit-speaker').value.trim(); const activity = $('edit-activity').value.trim(); if (!speaker || !activity) throw new Error(); changeData(next => { const task = next.meetings.find(m => m.id === data.activeId).records.find(t => t.id === editId); task.speaker = speaker; task.activityLabel = activity; }); $('edit-record').close(); renderRecords(); } catch { $('edit-error').textContent = '请填写姓名和环节，并确认本地存储可用。'; } });
+$('edit-form').addEventListener('submit', event => { event.preventDefault(); try { const speaker = $('edit-speaker').value.trim(); const activity = $('edit-activity').value.trim(); if (!speaker || !activity) throw new Error(); changeData(next => { const task = next.meetings.find(m => m.id === data.activeId).records.find(t => t.id === editId); if (!task) throw new Error(); const statusOverride = document.querySelector('[name="record-status"]:checked')?.value; Object.assign(task,editRecord(task,{speaker,activityLabel:activity,statusOverride})); }); $('edit-record').close(); renderRecords(); } catch { $('edit-error').textContent = '请填写姓名、环节并选择状态，同时确认本地存储可用。'; } });
 function saveSegment() {
   if (!segmentTimer) return true;
   const task = segmentTimer.finish();
@@ -256,7 +269,7 @@ $('add-segment').addEventListener('click', () => {
   segmentCount += 1;
   const task = makeTask({ ...timer.task, plannedId: null, title: timer.task.title, activity: 'tableTopics', targetSeconds:timer.task.thresholds.red, lightsEnabled:true,
     activityLabel: `${timer.task.activityLabel} · 分段`,
-    speaker: $('segment-name').value.trim() || `分段 ${segmentCount}`,
+    speaker: $('segment-name').value.trim() || nextSpeakerName(records()),
     thresholds: timer.task.thresholds });
   task.parentTaskId = timer.task.id; task.segmentIndex = segmentCount;
   segmentTimer = new Timer(task); segmentTimer.start(); completedSegment = null;
@@ -268,6 +281,7 @@ function isPlanDone(plan) { return records().some(task => task.plannedId === pla
 function loadPlan(plan) {
   if (['running','paused'].includes(timer?.state)) return;
   resetPerson(); activePlan = plan;
+  $('live-speaker').value = plan.speaker;
   $('preset').value = plan.activity; $('title').value = plan.activityLabel; $('speaker').value = plan.speaker;
   for (const key of ['green','yellow','red']) setDuration(key, plan.thresholds[key]);
   if (plan.activity === 'tableTopicsSession') { $('session-scene').value = plan.scene || 'manual'; const seconds = (plan.estimatedMinutes || 20) * 60; $('topics-minutes').value = Math.floor(seconds/60); $('topics-seconds').value = Math.round(seconds%60); }
@@ -346,8 +360,21 @@ $('preset').addEventListener('change', () => {
 });
 for (const id of fields) $(id).addEventListener('input', () => { saveSettings(); setError(); if (id === 'title') render(); });
 $('start').addEventListener('click', () => {
-  try { const task = makeTask(config()); if (!currentMeeting().startedAt) changeData(next => { next.meetings.find(m => m.id === data.activeId).startedAt = new Date().toISOString(); }); timer = new Timer(task); timer.start(); lockSettings(true); saveSettings(); setError(); render(); }
+  try { const task = makeTask(config()); $('speaker').value = task.speaker; $('live-speaker').value = task.speaker; awaitingNext = false; lastSavedNote = ''; if (!currentMeeting().startedAt) changeData(next => { next.meetings.find(m => m.id === data.activeId).startedAt = new Date().toISOString(); }); timer = new Timer(task); timer.start(); lockSettings(true); saveSettings(); setError(); render(); }
   catch (error) { setError(error.message); }
+});
+for (const id of ['speaker','live-speaker']) $(id).addEventListener('input', () => {
+  const value = $(id).value;
+  $(id === 'speaker' ? 'live-speaker' : 'speaker').value = value;
+  if (timer && ['running','paused'].includes(timer.state)) timer.task.speaker = value.trim() || nextSpeakerName(records());
+  render();
+});
+for (const button of document.querySelectorAll('[data-quick]')) button.addEventListener('click', () => {
+  if (['running','paused'].includes(timer?.state)) return;
+  const type = button.dataset.quick;
+  $('preset').value = MULTI_SCENES[type] ? 'tableTopicsSession' : type;
+  $('preset').dispatchEvent(new Event('change'));
+  if (MULTI_SCENES[type]) { $('session-scene').value = type; $('session-scene').dispatchEvent(new Event('change')); }
 });
 $('pause').addEventListener('click', () => { if (timer?.state === 'running') { timer.pause(); segmentTimer?.pause(); } else { timer?.resume(); segmentTimer?.resume(); } render(); });
 $('finish').addEventListener('click', async () => {
@@ -356,8 +383,12 @@ $('finish').addEventListener('click', async () => {
   if (segmentCount && task.activity !== 'tableTopicsSession') { task.activity = 'sessionTotal'; task.activityLabel += ' · 总用时'; task.segmentCount = segmentCount; }
   try { storeTask(task); }
   catch { timer.state = 'paused'; setError('保存失败，请导出已有记录并检查存储，再重试结束保存。'); render(); return; }
-  try { await saveTimingRecord(task); } catch { /* A future adapter can report sync failure here. */ }
+  if (!(currentMeeting().plannedTasks || []).length) {
+    resetPerson(); $('speaker').value = ''; $('live-speaker').value = '';
+    awaitingNext = true; lastSavedNote = `${task.speaker} · ${formatTime(task.result.elapsedMs/1000)} 已保存。串场不计时，下一位开口时再开始。`;
+  }
   render(); renderRecords();
+  try { await saveTimingRecord(task); } catch { /* A future adapter can report sync failure here. */ }
 });
 $('reset').addEventListener('click', () => { if (timer && timer.state !== 'finished' && !confirm('重置会丢弃当前未保存的计时，已保存的分段仍保留。')) return; resetPerson(); });
 function setMode(next) {

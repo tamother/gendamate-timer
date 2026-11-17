@@ -169,3 +169,27 @@ test('旧议程只更新未完成的导入条目，保留标识顺序与已调�
   assert.deepEqual(upgradeAgendaPlans(result,[{plannedId:'done'}]),result);
   assert.equal(plans[1].activity,'speech');
 });
+
+import * as core from './timer-core.mjs';
+import * as report from './report.mjs';
+test('未填写姓名也可使用不重复的临时编号，忽略环节总用时', () => {
+  assert.equal(core.nextSpeakerName([]),'发言人 01');
+  assert.equal(core.nextSpeakerName([{speaker:'发言人 03',activity:'speech'},{speaker:'主持人',activity:'tableTopicsSession'}]),'发言人 04');
+});
+test('手动状态覆盖报告颜色与文案，恢复自动后按原始用时判断', () => {
+  const task={id:'edit',speaker:'发言人 01',activity:'speech',thresholds:PRESETS.speech,result:{elapsedMs:20000,finalColor:'neutral'}};
+  const edited=report.editRecord(task,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'yellow'});
+  assert.equal(report.timingStatus(edited).color,'yellow');
+  assert.match(report.timingStatus(edited).text,/黄灯/);
+  assert.deepEqual(edited.result,task.result);
+  assert.equal(task.speaker,'发言人 01');
+  const meeting={name:'本场例会',date:'2026-11-18'};
+  assert.match(report.reportText(meeting,[edited]),/黄灯/);
+  assert.match(report.reportCsv(meeting,[edited]),/黄灯/);
+  assert.match(report.reportHtml(meeting,[edited]),/class="yellow"/);
+  assert.equal(report.reportCanvasData(meeting,[edited]).rows[1].color,'yellow');
+  const restored=report.editRecord(edited,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'auto'});
+  assert.equal(report.timingStatus(restored).color,'neutral');
+  for(const statusOverride of ['neutral','green','yellow','red']) assert.equal(report.timingStatus(report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride})).color,statusOverride);
+  assert.throws(()=>report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride:'invalid'}));
+});

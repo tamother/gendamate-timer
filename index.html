@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151a24">
+  <title>头马演讲计时器</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar"><div><h1>演讲计时器</h1><p>清晰提示每一段发言时间</p></div><span class="offline">可离线使用</span></header>
+    <div class="layout">
+      <section class="controls" aria-label="计时设置">
+        <h2>设置本轮计时</h2>
+        <label>计时类型<select id="preset"><option value="speech">备稿演讲 · 5 / 6 / 7 分钟</option><option value="evaluation">点评 · 2 / 2:30 / 3 分钟</option><option value="tableTopics">即兴 · 1 / 1:30 / 2 分钟</option><option value="custom">自定义</option></select></label>
+        <label>标题<input id="title" maxlength="80" value="备稿演讲" autocomplete="off"></label>
+        <div class="thresholds"><label>绿色 <small>分钟:秒</small><input id="green" inputmode="numeric" value="05:00"></label><label>黄色 <small>分钟:秒</small><input id="yellow" inputmode="numeric" value="06:00"></label><label>红色 <small>分钟:秒</small><input id="red" inputmode="numeric" value="07:00"></label></div>
+        <label class="check"><input id="sound" type="checkbox"> 切换颜色时播放提示音</label>
+        <p id="error" class="error" role="alert"></p>
+        <p class="hint">开始后锁定本轮设置。重置后可调整；结束会将本轮记录保存在此浏览器。</p>
+      </section>
+      <section id="timer-panel" class="timer-panel" aria-label="计时器">
+        <div class="panel-head"><span id="status">准备就绪</span><span id="color-label">未到提示时间</span></div>
+        <div id="display" class="display neutral"><div id="display-title" class="display-title">备稿演讲</div><div id="digits" class="digits">00:00</div><div id="display-state" class="display-state">准备开始</div></div>
+        <div class="actions"><button id="start" class="primary">开始计时</button><button id="pause" disabled>暂停</button><button id="finish" disabled>结束并保存</button><button id="reset">重置</button></div>
+        <div class="view-options"><span>观众展示</span><button id="number-mode" class="selected" aria-pressed="true">颜色 + 数字</button><button id="color-mode" aria-pressed="false">纯色</button><button id="fullscreen">全屏展示</button></div>
+      </section>
+    </div>
+    <section class="records"><div class="records-head"><h2>最近记录</h2><button id="export">导出 JSON</button></div><div id="records-list" class="records-list">暂无记录</div></section>
+    <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
+  </main>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

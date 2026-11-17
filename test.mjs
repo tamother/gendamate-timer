@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PRESETS, Timer, makeTask, colorAt, formatTime, validateThresholds } from './timer-core.mjs';
-import { thresholdsForDuration } from './timer-core.mjs';
+import { thresholdsForDuration, presentationState } from './timer-core.mjs';
 
 test('自定义总时长按剩余2分钟、1分钟和到点计算，并验证范围', () => {
   assert.deepEqual(thresholdsForDuration(480), {green:360,yellow:420,red:480});
@@ -82,7 +82,7 @@ import { parseAgendaImport, presetForMinutes } from './agenda-adapter.mjs';
 test('AgendaMate 真实字段导入全部环节，按原定时长匹配预设', () => {
   const imported=parseAgendaImport({clubId:'club-1',clubName:'PRO',meeting:{mDate:'2026-11-17',mNo:'第793期',theme:'例会',agenda:[{id:'a',i:'Call to Order',n:'Linda',d:'2'},{id:'b',i:'Individual Evaluation',n:'Nora',d:3},{id:'c',i:'Prepared Speech',n:'Smile',d:7},{id:'d',i:'Table Topics Session',n:'Jae',d:20},{id:'e',i:'Closing Remarks',n:'President',d:2}]}});
   assert.equal(imported.tasks.length,5);
-  assert.deepEqual(imported.tasks.map(t=>t.activity),['tableTopics','evaluation','speech','speech','tableTopics']);
+  assert.deepEqual(imported.tasks.map(t=>t.activity),['tableTopics','evaluation','speech','tableTopicsSession','tableTopics']);
   assert.equal(imported.tasks[3].estimatedMinutes,20);
   assert.equal(imported.tasks[0].speaker,'Linda');
   assert.equal(imported.tasks[0].agendaSource.clubId,'club-1');
@@ -98,4 +98,22 @@ test('缺失字段不猜测，重复导入的来源标识稳定', () => {
   assert.equal(a.tasks[0].id,b.tasks[0].id);
   assert.throws(()=>parseAgendaImport({meeting:{agenda:[]}}));
   assert.throws(()=>parseAgendaImport('not json'));
+});
+
+test('即兴环节总时长不变牌，仅当前2分钟分段变牌', () => {
+  let now=0;
+  const total=new Timer(makeTask({title:'即兴环节',activity:'tableTopicsSession',targetSeconds:1200,lightsEnabled:false,thresholds:PRESETS.tableTopics},'session'),()=>now);
+  const part=new Timer(makeTask({title:'分段',activity:'tableTopics',thresholds:PRESETS.tableTopics},'part'),()=>now);
+  total.start();now=1100000;
+  assert.equal(total.color,'neutral');
+  assert.equal(presentationState(total).color,'neutral');
+  assert.equal(presentationState(total).seconds,null);
+  assert.equal(presentationState(total).remaining,100);
+  part.start();now+=60000;assert.equal(presentationState(total,part).color,'green');
+  now+=30000;assert.equal(presentationState(total,part).color,'yellow');
+  now+=30000;assert.equal(presentationState(total,part).color,'red');
+  part.finish();assert.equal(presentationState(total,null,part).color,'neutral');
+  assert.equal(presentationState(total,null,part).remaining,-20);
+  total.pause();now+=10000;assert.equal(presentationState(total).remaining,-20);
+  assert.equal(timingStatus(total.finish()).color,'neutral');
 });

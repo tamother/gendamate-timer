@@ -32,6 +32,17 @@ export function formatTime(seconds) {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
+export function presentationState(timer, segmentTimer = null, completedSegment = null) {
+  const session = timer?.task.activity === 'tableTopicsSession';
+  const shown = session ? segmentTimer : segmentTimer || completedSegment || timer;
+  return {
+    shown,
+    color: shown?.color || 'neutral',
+    seconds: shown ? shown.seconds : (session ? null : 0),
+    remaining: session ? (timer.task.targetSeconds ?? 1200) - timer.seconds : null,
+  };
+}
+
 export function makeTask(config, id = crypto.randomUUID()) {
   const thresholds = validateThresholds(config.thresholds);
   return {
@@ -39,6 +50,7 @@ export function makeTask(config, id = crypto.randomUUID()) {
     speaker: config.speaker ?? '', meetingId: config.meetingId ?? null,
     activityLabel: config.activityLabel ?? config.title.trim(),
     plannedId: config.plannedId ?? null, estimatedMinutes: config.estimatedMinutes ?? null,
+    targetSeconds: config.targetSeconds ?? null, lightsEnabled: config.lightsEnabled !== false,
     agendaSource: config.agendaSource ?? null,
     thresholds, startedAt: null, endedAt: null,
     result: null,
@@ -57,7 +69,7 @@ export class Timer {
   get seconds() {
     return (this.elapsedMs + (this.state === 'running' ? Math.max(0, this.now() - this.runningSince) : 0)) / 1000;
   }
-  get color() { return colorAt(this.seconds, this.task.thresholds); }
+  get color() { return this.task.lightsEnabled === false ? 'neutral' : colorAt(this.seconds, this.task.thresholds); }
   start() {
     if (this.state !== 'idle') return;
     this.task.startedAt = this.wallNow();

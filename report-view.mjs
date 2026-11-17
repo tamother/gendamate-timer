@@ -1,4 +1,4 @@
-import { reportCanvasData } from './report.mjs?v=8';
+import { reportCanvasData } from './report.mjs?v=9';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}
@@ -25,7 +25,7 @@ let y=440;
 for(const row of data.rows){if(row.heading){text(row.heading,70,y+35,28,'#235d46',650);y+=100;continue;}
 ctx.fillStyle='#edf3ed';ctx.fillRect(60,y-8,960,130);
 ctx.font='600 34px system-ui,sans-serif';text(fit(row.name,600),85,y+35,34,'#203c2d',600,600);
-text('标准 '+row.range,85,y+84,23,'#748477');text(row.time,730,y+38,42,colors[row.color],700,270);
+text(row.range.startsWith('总时长')?row.range:'标准 '+row.range,85,y+84,23,'#748477');text(row.time,730,y+38,42,colors[row.color],700,270);
 text(row.text,560,y+86,20,colors[row.color],450,430);y+=150;}
 text('每一分钟，都值得被认真记录。',70,canvas.height-130,26,'#658675',500);
 text('状态仅描述提示灯时间，供例会计时参考。',70,canvas.height-78,21,'#8b988d');

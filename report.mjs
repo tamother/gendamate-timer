@@ -1,13 +1,19 @@
-import { formatTime, PRESETS } from './timer-core.mjs?v=8';
+import { formatTime, PRESETS } from './timer-core.mjs?v=9';
 
 export function timingStatus(task) {
   const seconds = (task.result?.elapsedMs ?? 0) / 1000;
   const { green, yellow, red } = task.thresholds;
+  if (task.lightsEnabled === false) {
+    const target = task.targetSeconds ?? red;
+    return { color: 'neutral', text: seconds > target ? `精彩加时 · 超出总时长 ${formatTime(seconds-target)}` : `掌控全场 · 余 ${formatTime(Math.ceil(target-seconds))}` };
+  }
+
   if (seconds < green) return { color: 'neutral', text: `意犹未尽 · 距绿灯 ${formatTime(Math.ceil(green - seconds))}` };
   if (seconds < yellow) return { color: 'green', text: '从容收官 · 绿灯区' };
   if (seconds < red) return { color: 'yellow', text: '踩准节奏 · 黄灯区' };
   return { color: 'red', text: seconds === red ? '红灯亮啦 · 刚好到点' : `精彩加时 · 超过红灯 ${formatTime(seconds - red)}` };
 }
+export function standardTime(task) { return task.lightsEnabled === false ? `总时长 ${formatTime(task.targetSeconds ?? task.thresholds.red)}` : `${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}`; }
 export function activityName(task) { return task.activityLabel || PRESETS[task.activity]?.title || '自定义环节'; }
 export function groupRecords(records) {
   const groups = new Map();
@@ -22,7 +28,7 @@ export function reportText(meeting, records) {
   const lines = [`${meeting.name} · 计时员报告`, meeting.date, ''];
   for (const [name, tasks] of groupRecords(records)) {
     lines.push(`【${name}】`);
-    for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}）`);
+    for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${standardTime(task)}）`);
     lines.push('');
   }
   lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。状态仅描述提示灯时间，供例会计时参考。`);
@@ -35,7 +41,7 @@ function csvCell(value) {
 }
 export function reportCsv(meeting, records) {
   const rows = [['会议', '日期', '姓名', '环节', '标准用时', '实际用时', '时间状态', '绿灯秒', '黄灯秒', '红灯秒', '实际毫秒', '开始时间', '结束时间', '任务ID']];
-  for (const task of records) rows.push([meeting.name, meeting.date, task.speaker || '待补姓名', activityName(task), `${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}`, formatTime(task.result.elapsedMs / 1000), timingStatus(task).text, task.thresholds.green, task.thresholds.yellow, task.thresholds.red, task.result.elapsedMs, task.startedAt, task.endedAt, task.id]);
+  for (const task of records) rows.push([meeting.name, meeting.date, task.speaker || '待补姓名', activityName(task), `${standardTime(task)}`, formatTime(task.result.elapsedMs / 1000), timingStatus(task).text, task.thresholds.green, task.thresholds.yellow, task.thresholds.red, task.result.elapsedMs, task.startedAt, task.endedAt, task.id]);
   return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
 }
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -45,7 +51,7 @@ export function reportHtml(meeting, records) {
     body += `<h2>${escape(name)}</h2><table><thead><tr><th>姓名</th><th>标准用时</th><th>实际用时</th><th>时间状态</th></tr></thead><tbody>`;
     for (const task of tasks) {
       const status = timingStatus(task);
-      body += `<tr><td>${escape(task.speaker || '待补姓名')}</td><td>${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}</td><td class="${status.color}">${formatTime(task.result.elapsedMs / 1000)}</td><td>${escape(status.text)}</td></tr>`;
+      body += `<tr><td>${escape(task.speaker || '待补姓名')}</td><td>${standardTime(task)}</td><td class="${status.color}">${formatTime(task.result.elapsedMs / 1000)}</td><td>${escape(status.text)}</td></tr>`;
     }
     body += '</tbody></table>';
   }
@@ -56,7 +62,7 @@ export function reportCanvasData(meeting, records) {
   const rows = [];
   for (const [activity, tasks] of groupRecords(records)) {
     rows.push({ heading: activity });
-    for (const task of tasks) rows.push({ name: task.speaker || '待补姓名', time: formatTime(task.result.elapsedMs / 1000), range: `${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}`, ...timingStatus(task) });
+    for (const task of tasks) rows.push({ name: task.speaker || '待补姓名', time: formatTime(task.result.elapsedMs / 1000), range: `${standardTime(task)}`, ...timingStatus(task) });
   }
   const startedAt = meeting.startedAt || records.map(t => t.startedAt).filter(Boolean).sort()[0];
   const endedAt = records.map(t => t.endedAt).filter(Boolean).sort().at(-1);

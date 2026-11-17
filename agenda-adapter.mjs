@@ -1,4 +1,4 @@
-import { PRESETS } from './timer-core.mjs?v=8';
+import { PRESETS } from './timer-core.mjs?v=9';
 
 export function presetForMinutes(minutes) {
   if (Number.isFinite(minutes) && minutes > 0 && minutes <= 2) return 'tableTopics';
@@ -22,8 +22,9 @@ export function parseAgendaImport(input) {
     const value = row.d ?? row.durationMinutes;
     const minutes = typeof value === 'number' || (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) ? Number(value) : NaN;
     const valid = Number.isFinite(minutes) && minutes > 0 && minutes <= 1440;
-    const activity = presetForMinutes(valid ? minutes : null);
-    const preset = PRESETS[activity];
+    const session = /^(table topics(?: session)?|即兴环节|即兴演讲环节|即兴演讲主持|ttm)$/i.test(title);
+    const activity = session ? 'tableTopicsSession' : presetForMinutes(valid ? minutes : null);
+    const preset = PRESETS[activity] || PRESETS.tableTopics;
     const speaker = String(row.n ?? row.speaker ?? '').trim().slice(0, 100);
     const signature = JSON.stringify([title, speaker, valid ? minutes : null]);
     const occurrence = (occurrences.get(signature) || 0) + 1;

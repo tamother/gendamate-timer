@@ -10,6 +10,19 @@ let timer = null;
 let lastColor = 'neutral';
 let mode = 'number';
 let audioContext = null;
+let wakeLock = null;
+async function keepScreenAwake() {
+  if (!document.body.classList.contains('presenting') || document.visibilityState !== 'visible') return;
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+function leaveDisplay() {
+  document.body.classList.remove('presenting');
+  $('exit-display').hidden = true;
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+  $('fullscreen').focus();
+}
+
 
 function parseTime(value) {
   const match = /^(\d{1,3}):([0-5]\d)$/.exec(value.trim());
@@ -113,7 +126,26 @@ function setMode(next) {
 }
 $('number-mode').addEventListener('click', () => setMode('number'));
 $('color-mode').addEventListener('click', () => setMode('color'));
-$('fullscreen').addEventListener('click', async () => { try { await $('timer-panel').requestFullscreen(); } catch { setError('浏览器未能进入全屏，请使用浏览器的全屏功能。'); } });
+$('fullscreen').addEventListener('click', () => {
+  document.body.classList.add('presenting');
+  $('exit-display').hidden = false;
+  $('exit-display').focus();
+  // CSS fills the viewport even on phones without the Fullscreen API.
+  const request = $('timer-panel').requestFullscreen;
+  if (request) request.call($('timer-panel')).catch(() => {});
+  keepScreenAwake();
+});
+$('exit-display').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  leaveDisplay();
+});
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) leaveDisplay();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.body.classList.contains('presenting')) leaveDisplay();
+});
+document.addEventListener('visibilitychange', keepScreenAwake);
 $('export').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(records(), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob); const link = document.createElement('a');

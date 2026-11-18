@@ -1,5 +1,5 @@
-import { reportCanvasData } from './report.mjs?v=20';
-import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=20';
+import { reportCanvasData } from './report.mjs?v=21';
+import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=21';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}

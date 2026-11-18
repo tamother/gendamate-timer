@@ -16,3 +16,5 @@
 .result-time.yellow{color:#f4b76b}.status-description.short{color:#f4b76b}.status-description.onTime{color:#63d99c}.status-description.overTime{color:#ff8991}.status-choices .status-short{--status:#f4b76b;--status-bg:#3d2b1b}.status-choices .status-onTime{--status:#63d99c;--status-bg:#1b382b}.status-choices .status-overTime{--status:#ff8991;--status-bg:#3d222a}.status-choices label{color:var(--status);border-color:var(--status);background:transparent}.status-choices label:has(input:checked){color:var(--status);border-color:var(--status);background:var(--status-bg);box-shadow:inset 3px 0 var(--status)}.status-choices input[type=radio]{accent-color:var(--status)}.status-dot{width:9px;height:9px;border-radius:50%;background:var(--status);flex-shrink:0}
 
 .quick-types button strong{display:block;font-size:14px;line-height:1.4}.quick-types button small{display:block;font-size:10px;font-weight:400;line-height:1.4;opacity:.7;margin-top:2px}.quick-types button{align-content:center}
+
+.quick-types button strong{white-space:nowrap}@media(max-width:700px){.quick-types button{padding-left:9px;padding-right:9px}}

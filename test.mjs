@@ -193,3 +193,19 @@ test('手动状态覆盖报告颜色与文案，恢复自动后按原始用时�
   for(const statusOverride of ['neutral','green','yellow','red']) assert.equal(report.timingStatus(report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride})).color,statusOverride);
   assert.throws(()=>report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride:'invalid'}));
 });
+
+test('多人环节集中归类，分段按发言顺序展示，环节总用时成为摘要', () => {
+  const record=(id,speaker,activityLabel,parentTaskId=null)=>({id,speaker,activityLabel,parentTaskId,activity:parentTaskId?'tableTopics':'speech',thresholds:PRESETS.tableTopics,result:{elapsedMs:90000}});
+  const parent={...record('total','主持人','Guest Introduction'),activity:'tableTopicsSession',lightsEnabled:false,targetSeconds:300,result:{elapsedMs:240000}};
+  const records=[record('g1','嘉宾甲','Guest Introduction · 分段','total'),record('speech','讲者','备稿演讲'),record('g2','嘉宾乙','Guest Introduction · 分段','total'),parent,record('t','即兴甲','即兴演讲 · 分段','topics')];
+  const groups=report.groupRecords(records);
+  assert.deepEqual([...groups.keys()],['嘉宾介绍','备稿演讲','即兴演讲']);
+  const data=report.reportCanvasData({name:'例会',date:'2026-11-18'},records);
+  const guest=data.rows.find(r=>r.heading==='嘉宾介绍');
+  assert.match(guest.summary,/2 次发言/);assert.match(guest.summary,/04:00/);
+  assert.deepEqual(data.rows.filter(r=>!r.heading).map(r=>r.name),['嘉宾甲','嘉宾乙','讲者','即兴甲']);
+  assert.ok(!data.rows.some(r=>r.name==='主持人'));
+  const text=report.reportText({name:'例会',date:'2026-11-18'},records);
+  assert.match(text,/🟨 嘉宾甲/);assert.ok(text.indexOf('嘉宾乙')<text.indexOf('【备稿演讲】'));
+  assert.ok(!text.includes('【Guest Introduction · 分段】'));
+});

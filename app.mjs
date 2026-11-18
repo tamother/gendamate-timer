@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=12';
-import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=12';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=12';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=13';
+import { timingStatus, editRecord, STATUS_OPTIONS, activityName, isSessionTotal, groupSummary, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=13';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=13';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -232,11 +232,11 @@ function renderRecords() {
   $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态默认按灯色判断，可手动修正。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
-    const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
+    const heading = document.createElement('h3'); heading.textContent = name; list.append(heading); const summary = document.createElement('p'); summary.className = 'group-summary'; summary.textContent = groupSummary(tasks); list.append(summary);
     for (const task of tasks) {
-      const row = document.createElement('div'); row.className = 'record report-row';
+      const row = document.createElement('div'); row.className = `record report-row${isSessionTotal(task) ? ' record-total' : ''}`;
       const info = document.createElement('div');
-      const title = document.createElement('strong'); title.textContent = task.speaker || '待补姓名';
+      const title = document.createElement('strong'); title.textContent = isSessionTotal(task) ? '环节总用时' : task.speaker || '待补姓名';
       const range = document.createElement('small'); range.textContent = task.lightsEnabled === false ? standardTime(task) : `标准 ${standardTime(task)}`;
       const result = document.createElement('div'); const status = timingStatus(task);
       const time = document.createElement('strong'); time.className = `result-time ${status.color}`; time.textContent = formatTime(task.result.elapsedMs / 1000);
@@ -420,12 +420,6 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && document.body.classList.contains('presenting')) leaveDisplay();
 });
 document.addEventListener('visibilitychange', keepScreenAwake);
-$('export').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob); const link = document.createElement('a');
-  link.href = url; link.download = 'speech-timing-records.json'; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
 function download(content, type, extension) {
   const url = URL.createObjectURL(new Blob([content], { type })); const link = document.createElement('a');
   link.href = url; link.download = `计时报告-${currentMeeting().date}.${extension}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -443,7 +437,6 @@ $('html-report').addEventListener('click', () => {
     }
   } catch { $('report-message').textContent = '无法生成预览，请检查浏览器存储后重试。'; }
 });
-$('print-report').addEventListener('click', () => window.print());
 loadSettings();
 for (const key of ['green','yellow','red']) { try { setDuration(key, parseTime($(key).value)); } catch { setDuration(key, PRESETS.speech[key]); } }
 showCustomDuration(); renderMeetings(); renderRecords(); render();

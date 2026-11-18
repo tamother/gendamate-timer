@@ -181,10 +181,10 @@ test('三类手动状态覆盖全部报告，恢复自动后按原始用时判�
   const edited=report.editRecord(task,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'onTime'});
   assert.equal(report.timingStatus(edited).state,'onTime');
   assert.equal(report.timingStatus(edited).color,'green');
-  assert.match(report.timingStatus(edited).text,/刚好/);
+  assert.match(report.timingStatus(edited).text,/从容收官/);
   assert.deepEqual(edited.result,task.result);assert.equal(task.speaker,'发言人 01');
   const meeting={name:'本场例会',date:'2026-11-18'};
-  assert.match(report.reportText(meeting,[edited]),/刚好/);assert.match(report.reportCsv(meeting,[edited]),/刚好/);
+  assert.match(report.reportText(meeting,[edited]),/从容收官/);assert.match(report.reportCsv(meeting,[edited]),/从容收官/);
   assert.match(report.reportHtml(meeting,[edited]),/class="green"/);
   assert.equal(report.reportCanvasData(meeting,[edited]).rows[1].color,'green');
   const restored=report.editRecord(edited,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'auto'});

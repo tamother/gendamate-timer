@@ -1,5 +1,5 @@
-import { reportCanvasData } from './report.mjs?v=17';
-import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=17';
+import { reportCanvasData } from './report.mjs?v=18';
+import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=18';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}
@@ -21,7 +21,7 @@ ctx.font='700 54px system-ui,sans-serif';text(fit(data.name,940),70,210,54,'#203
 text(data.date+'  ·  '+data.span,70,275,27,'#748477');
 ctx.strokeStyle='#d9e4db';ctx.beginPath();ctx.moveTo(70,320);ctx.lineTo(1010,320);ctx.stroke();
 text('发言人 / 标准用时',70,385,23,'#748477');text('实际用时',720,385,23,'#748477');
-text('目标为红牌时间 · 前后5%为刚好（整秒，宽限1–10秒）',70,414,18,'#748477');
+text('目标为红牌时间 · 前后5%为从容收官（整秒，宽限1–10秒）',70,414,18,'#748477');
 const colors={neutral:'#718292',green:'#188447',yellow:'#b06a16',red:'#c43843'};
 let y=440;
 for(const row of data.rows){if(row.heading){text(row.heading,70,y+35,28,'#235d46',650);y+=100;continue;}

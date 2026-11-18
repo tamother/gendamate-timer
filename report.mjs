@@ -1,5 +1,5 @@
-import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=14';
-import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=14';
+import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=15';
+import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=15';
 
 export const STATUS_OPTIONS = Object.freeze({
   auto: '自动判断', neutral: '意犹未尽 · 未到绿灯', green: '从容收官 · 绿灯区',

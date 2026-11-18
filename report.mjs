@@ -1,5 +1,5 @@
-import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=21';
-import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=21';
+import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=22';
+import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=22';
 
 export const STATUS_OPTIONS = Object.freeze({ short:'意犹未尽', onTime:'从容收官', overTime:'精彩加时' });
 const STATUS_COLORS = Object.freeze({ short:'yellow', onTime:'green', overTime:'red' });

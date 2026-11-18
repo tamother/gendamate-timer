@@ -7,7 +7,7 @@
   <title>头马演讲计时器</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23188447%27/%3E%3Cpath d=%27M10 9h12M16 9v16%27 stroke=%27white%27 stroke-width=%274%27/%3E%3C/svg%3E">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <main class="app">
@@ -35,9 +35,9 @@
     </div>
     <section class="records" id="report"><div class="records-head"><h2>本场计时报告</h2><div class="report-actions"><button id="copy-report">复制报告</button><button id="csv-report">导出 CSV</button><button id="html-report">预览报告 / 长图</button></div></div><p id="report-summary" class="hint"></p><p id="report-message" role="status"></p><div id="records-list" class="records-list">暂无记录</div><textarea id="copy-fallback" aria-label="报告文本（可长按复制）" hidden readonly></textarea></section>
     <dialog id="import-dialog"><h2>从 AgendaMate 导入议程</h2><p class="hint">在新窗口登录后，选择俱乐部当前已保存的议程，再发送到此处。姓名、环节和原定时长会进入待计时列表。</p><div class="report-actions"><button id="open-agenda">打开 AgendaMate</button><button id="close-import">关闭</button></div><p class="hint">也可导入 AgendaMate 计时数据 JSON 文件。</p><input id="agenda-file" type="file" accept=".json,application/json" aria-label="导入议程 JSON"><p id="import-status" role="status"></p><div id="import-preview"></div><button id="confirm-import" disabled>确认导入</button></dialog>
-    <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><fieldset class="status-choices"><legend>用时状态 · 单选</legend><label><input type="radio" name="record-status" value="auto" checked>自动判断（按实际用时）</label><label><input type="radio" name="record-status" value="neutral">意犹未尽 · 未到绿灯</label><label><input type="radio" name="record-status" value="green">从容收官 · 绿灯区</label><label><input type="radio" name="record-status" value="yellow">踩准节奏 · 黄灯区</label><label><input type="radio" name="record-status" value="red">红灯亮啦 · 红灯区</label></fieldset><p class="hint">只调整报告的状态与用时颜色，原始用时和提示时间保持不变。选择“自动判断”可恢复。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
+    <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><fieldset class="status-choices"><legend>用时状态 · 单选</legend><label class="status-short"><input type="radio" name="record-status" value="short"><span class="status-dot" aria-hidden="true"></span>不足时</label><label class="status-onTime"><input type="radio" name="record-status" value="onTime"><span class="status-dot" aria-hidden="true"></span>刚好</label><label class="status-overTime"><input type="radio" name="record-status" value="overTime"><span class="status-dot" aria-hidden="true"></span>超时</label></fieldset><label class="check"><input id="status-auto" type="checkbox" checked>按实际用时自动判断</label><p id="status-rule" class="hint"></p><p class="hint">选择状态会改为手动修正。勾选自动判断即可恢复；原始用时和提示牌时间保留。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
     <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
   </main>
-  <script type="module" src="app.mjs?v=16"></script>
+  <script type="module" src="app.mjs?v=17"></script>
 </body>
 </html>

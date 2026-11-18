@@ -1,29 +1,34 @@
-import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=16';
-import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=16';
+import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=17';
+import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=17';
 
-export const STATUS_OPTIONS = Object.freeze({
-  auto: '自动判断', neutral: '意犹未尽 · 未到绿灯', green: '从容收官 · 绿灯区',
-  yellow: '踩准节奏 · 黄灯区', red: '红灯亮啦 · 红灯区',
-});
+export const STATUS_OPTIONS = Object.freeze({ short:'不足时', onTime:'刚好', overTime:'超时' });
+const STATUS_COLORS = Object.freeze({ short:'yellow', onTime:'green', overTime:'red' });
+export function normalizeStatusOverride(value) {
+  if (Object.hasOwn(STATUS_OPTIONS,value)) return value;
+  const legacy = {neutral:'short',green:'onTime',yellow:'onTime',red:'overTime'};
+  return Object.hasOwn(legacy,value) ? legacy[value] : 'auto';
+}
+export function reportTimingWindow(task) {
+  const session = task.lightsEnabled === false || ['tableTopicsSession','sessionTotal'].includes(task.activity);
+  const target = session && Number(task.targetSeconds) > 0 ? Number(task.targetSeconds) : Number(task.thresholds.red);
+  const tolerance = Math.min(10, Math.max(1, Math.round(target*0.05)));
+  return { target, tolerance, lower:Math.max(0,target-tolerance), upper:target+tolerance };
+}
 export function editRecord(task, { speaker, activityLabel, statusOverride = 'auto' }) {
-  if (!speaker?.trim() || !activityLabel?.trim() || !Object.hasOwn(STATUS_OPTIONS,statusOverride)) throw new Error('请填写姓名、环节并选择有效的用时状态。');
+  if (!speaker?.trim() || !activityLabel?.trim() || (statusOverride !== 'auto' && !Object.hasOwn(STATUS_OPTIONS,statusOverride))) throw new Error('请填写姓名、环节并选择有效的用时状态。');
   return { ...task, speaker:speaker.trim(), activityLabel:activityLabel.trim(), statusOverride };
 }
 export function timingStatus(task) {
-  if (task.statusOverride && task.statusOverride !== 'auto' && Object.hasOwn(STATUS_OPTIONS,task.statusOverride)) return { color:task.statusOverride, text:`${STATUS_OPTIONS[task.statusOverride]}（手动调整）` };
   const seconds = (task.result?.elapsedMs ?? 0) / 1000;
-  const { green, yellow, red } = task.thresholds;
-  if (task.lightsEnabled === false) {
-    const target = task.targetSeconds ?? red;
-    return { color: 'neutral', text: seconds > target ? `精彩加时 · 超出总时长 ${formatTime(seconds-target)}` : `掌控全场 · 余 ${formatTime(Math.ceil(target-seconds))}` };
-  }
-
-  if (seconds < green) return { color: 'neutral', text: `意犹未尽 · 距绿灯 ${formatTime(Math.ceil(green - seconds))}` };
-  if (seconds < yellow) return { color: 'green', text: '从容收官 · 绿灯区' };
-  if (seconds < red) return { color: 'yellow', text: '踩准节奏 · 黄灯区' };
-  return { color: 'red', text: seconds === red ? '红灯亮啦 · 刚好到点' : `精彩加时 · 超过红灯 ${formatTime(seconds - red)}` };
+  const { lower, upper } = reportTimingWindow(task);
+  const override = normalizeStatusOverride(task.statusOverride);
+  const state = override !== 'auto' ? override : seconds < lower ? 'short' : seconds > upper ? 'overTime' : 'onTime';
+  return { state, color:STATUS_COLORS[state], text:STATUS_OPTIONS[state] + (override === 'auto' ? '' : '（手动调整）') };
 }
-export function standardTime(task) { return task.lightsEnabled === false ? `总时长 ${formatTime(task.targetSeconds ?? task.thresholds.red)}` : `${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}`; }
+export function standardTime(task) {
+  const { target, tolerance } = reportTimingWindow(task);
+  return `${task.lightsEnabled === false ? '总时长 ' : ''}${formatTime(target)} ± ${formatTime(tolerance)}`;
+}
 export function activityName(task) { return task.activityLabel || PRESETS[task.activity]?.title || '自定义环节'; }
 export function groupRecords(records) {
   const groups = new Map();
@@ -36,7 +41,7 @@ export function groupRecords(records) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   }
-  const rank = task => ['tableTopicsSession','sessionTotal'].includes(task.activity) ? 4 : ({neutral:0,green:1,yellow:2,red:3}[timingStatus(task).color] ?? 0);
+  const rank = task => ['tableTopicsSession','sessionTotal'].includes(task.activity) ? 4 : ({short:0,onTime:1,overTime:2}[timingStatus(task).state] ?? 0);
   for (const [key,tasks] of groups) groups.set(key,[...tasks].sort((a,b) => rank(a)-rank(b)));
   return groups;
 }
@@ -47,7 +52,7 @@ export function reportText(meeting, records) {
     for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${standardTime(task)}）`);
     lines.push('');
   }
-  lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。状态默认按提示灯时间判断，可由计时员修正，供例会计时参考。`);
+  lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。以红牌时间为目标，前后5%为刚好（整秒，宽限最少1秒、最多10秒）；状态可由计时员修正。`);
   return lines.join('\n');
 }
 function csvCell(value) {
@@ -71,7 +76,7 @@ export function reportHtml(meeting, records) {
     }
     body += '</tbody></table>';
   }
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#926500}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>状态默认按提示灯时间判断，可由计时员修正，供例会计时参考。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#a65d13}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>以红牌时间为目标，前后5%为刚好（整秒，宽限最少1秒、最多10秒）；状态可由计时员修正。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
 }
 
 export function reportCanvasData(meeting, records) {

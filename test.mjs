@@ -44,12 +44,12 @@ test('自定义阈值必须递增', () => {
 });
 
 import { timingStatus, reportText, reportCsv, reportHtml } from './report.mjs';
-test('报告边界、转义及同一人多次记录', () => {
+test('报告三类边界、转义及同一人多次记录', () => {
   const task = { id:'1', speaker:'<张三>', title:'不展示题目', activity:'speech', thresholds:PRESETS.speech, result:{elapsedMs:300000} };
-  assert.equal(timingStatus(task).color, 'green');
-  assert.equal(timingStatus({...task,result:{elapsedMs:360000}}).color, 'yellow');
-  assert.equal(timingStatus({...task,result:{elapsedMs:420000}}).text, '红灯亮啦 · 刚好到点');
-  assert.match(timingStatus({...task,result:{elapsedMs:421000}}).text, /00:01/);
+  assert.equal(timingStatus(task).state,'short');
+  for (const ms of [410000,420000,430000]) assert.equal(timingStatus({...task,result:{elapsedMs:ms}}).state,'onTime');
+  assert.equal(timingStatus({...task,result:{elapsedMs:409999}}).state,'short');
+  assert.equal(timingStatus({...task,result:{elapsedMs:430001}}).state,'overTime');
   const meeting = { name:'测试会议',date:'2026-11-17' };
   assert.equal(reportText(meeting,[task,task]).split('<张三>').length,3);
   assert.ok(!reportText(meeting,[task]).includes('不展示题目'));
@@ -115,7 +115,7 @@ test('即兴环节总时长不变牌，仅当前2分钟分段变牌', () => {
   part.finish();assert.equal(presentationState(total,null,part).color,'neutral');
   assert.equal(presentationState(total,null,part).remaining,-20);
   total.pause();now+=10000;assert.equal(presentationState(total).remaining,-20);
-  assert.equal(timingStatus(total.finish()).color,'neutral');
+  assert.equal(timingStatus(total.finish()).state,'overTime');
 });
 
 test('总时长已超出时，嘉宾分段仍按自定义阈值独立变牌', () => {
@@ -176,24 +176,22 @@ test('未填写姓名也可使用不重复的临时编号，忽略环节总用�
   assert.equal(core.nextSpeakerName([]),'发言人 01');
   assert.equal(core.nextSpeakerName([{speaker:'发言人 03',activity:'speech'},{speaker:'主持人',activity:'tableTopicsSession'}]),'发言人 04');
 });
-test('手动状态覆盖报告颜色与文案，恢复自动后按原始用时判断', () => {
+test('三类手动状态覆盖全部报告，恢复自动后按原始用时判断', () => {
   const task={id:'edit',speaker:'发言人 01',activity:'speech',thresholds:PRESETS.speech,result:{elapsedMs:20000,finalColor:'neutral'}};
-  const edited=report.editRecord(task,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'yellow'});
-  assert.equal(report.timingStatus(edited).color,'yellow');
-  assert.match(report.timingStatus(edited).text,/黄灯/);
-  assert.deepEqual(edited.result,task.result);
-  assert.equal(task.speaker,'发言人 01');
+  const edited=report.editRecord(task,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'onTime'});
+  assert.equal(report.timingStatus(edited).state,'onTime');
+  assert.equal(report.timingStatus(edited).color,'green');
+  assert.match(report.timingStatus(edited).text,/刚好/);
+  assert.deepEqual(edited.result,task.result);assert.equal(task.speaker,'发言人 01');
   const meeting={name:'本场例会',date:'2026-11-18'};
-  assert.match(report.reportText(meeting,[edited]),/黄灯/);
-  assert.match(report.reportCsv(meeting,[edited]),/黄灯/);
-  assert.match(report.reportHtml(meeting,[edited]),/class="yellow"/);
-  assert.equal(report.reportCanvasData(meeting,[edited]).rows[1].color,'yellow');
+  assert.match(report.reportText(meeting,[edited]),/刚好/);assert.match(report.reportCsv(meeting,[edited]),/刚好/);
+  assert.match(report.reportHtml(meeting,[edited]),/class="green"/);
+  assert.equal(report.reportCanvasData(meeting,[edited]).rows[1].color,'green');
   const restored=report.editRecord(edited,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'auto'});
-  assert.equal(report.timingStatus(restored).color,'neutral');
-  for(const statusOverride of ['neutral','green','yellow','red']) assert.equal(report.timingStatus(report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride})).color,statusOverride);
+  assert.equal(report.timingStatus(restored).state,'short');
+  for(const statusOverride of ['short','onTime','overTime']) assert.equal(report.timingStatus(report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride})).state,statusOverride);
   assert.throws(()=>report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride:'invalid'}));
 });
-
 test('多人环节集中归类，同状态按发言顺序展示，总用时放在组末尾', () => {
   const record=(id,speaker,activityLabel,parentTaskId=null)=>({id,speaker,activityLabel,parentTaskId,activity:parentTaskId?'tableTopics':'speech',thresholds:PRESETS.tableTopics,result:{elapsedMs:90000}});
   const parent={...record('total','主持人','Guest Introduction'),activity:'tableTopicsSession',lightsEnabled:false,targetSeconds:300,result:{elapsedMs:240000}};
@@ -208,14 +206,32 @@ test('多人环节集中归类，同状态按发言顺序展示，总用时放�
   assert.ok(!text.includes('【Guest Introduction · 分段】'));
 });
 
-test('报告每组按未绿、绿、黄、红排序，采用手动状态且不打乱原始记录', () => {
+test('报告每组按不足时、刚好、超时排序，保留同类顺序且不修改原始记录', () => {
   const make=(id,ms,statusOverride)=>({id,speaker:id,activity:'speech',activityLabel:'备稿演讲',thresholds:PRESETS.speech,result:{elapsedMs:ms},statusOverride});
-  const records=[make('红',450000),make('绿甲',310000),make('未绿',10000),make('黄讲者',365000),make('绿乙',320000),make('手调红',10000,'red')];
+  const records=[make('超时甲',450000),make('刚好甲',410000),make('不足讲者',300000),make('刚好乙',430000),make('手调超时',10000,'overTime')];
   const before=structuredClone(records);
   const ordered=[...report.groupRecords(records).values()][0];
-  assert.deepEqual(ordered.map(t=>t.id),['未绿','绿甲','绿乙','黄讲者','红','手调红']);
+  assert.deepEqual(ordered.map(t=>t.id),['不足讲者','刚好甲','刚好乙','超时甲','手调超时']);
   assert.deepEqual(records,before);
   const meeting={name:'例会',date:'2026-11-18'};
   assert.deepEqual(report.reportCanvasData(meeting,records).rows.filter(r=>!r.heading).map(r=>r.name),ordered.map(t=>t.id));
-  for(const output of [report.reportText(meeting,records),report.reportCsv(meeting,records),report.reportHtml(meeting,records)]) assert.ok(output.indexOf('未绿')<output.indexOf('绿甲')&&output.indexOf('绿甲')<output.indexOf('黄讲者')&&output.indexOf('黄讲者')<output.indexOf('手调红'));
+  for(const output of [report.reportText(meeting,records),report.reportCsv(meeting,records),report.reportHtml(meeting,records)]) assert.ok(output.indexOf('不足讲者')<output.indexOf('刚好甲')&&output.indexOf('刚好甲')<output.indexOf('超时甲'));
+});
+test('以红牌为目标，5%宽限取整且封顶10秒，环节总用时使用总目标', () => {
+  const task=red=>({thresholds:{green:red/3,yellow:red/2,red},result:{elapsedMs:red*1000}});
+  for(const [target,tolerance] of [[420,10],[180,9],[120,6],[60,3],[30,2],[600,10]]) {
+    const window=report.reportTimingWindow(task(target));
+    assert.deepEqual(window,{target,tolerance,lower:target-tolerance,upper:target+tolerance});
+    assert.equal(report.timingStatus({...task(target),result:{elapsedMs:(target-tolerance)*1000}}).state,'onTime');
+    assert.equal(report.timingStatus({...task(target),result:{elapsedMs:(target+tolerance)*1000}}).state,'onTime');
+    assert.equal(report.timingStatus({...task(target),result:{elapsedMs:(target+tolerance)*1000+1}}).state,'overTime');
+  }
+  assert.equal(report.reportTimingWindow({...task(120),activity:'tableTopicsSession',lightsEnabled:false,targetSeconds:1200}).target,1200);
+});
+test('旧版手动灯色与新状态兼容，自动结果不再使用灰色', () => {
+  assert.deepEqual(['neutral','green','yellow','red','auto'].map(report.normalizeStatusOverride),['short','onTime','onTime','overTime','auto']);
+  const task={thresholds:PRESETS.speech,result:{elapsedMs:500000}};
+  assert.notEqual(report.timingStatus({...task,result:{elapsedMs:1000}}).color,report.timingStatus(task).color);
+  assert.equal(report.timingStatus({...task,statusOverride:'neutral'}).state,'short');
+  assert.equal(report.timingStatus({...task,statusOverride:'red'}).state,'overTime');
 });

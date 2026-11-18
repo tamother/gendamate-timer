@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=16';
-import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=16';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=16';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=17';
+import { timingStatus, editRecord, normalizeStatusOverride, reportTimingWindow, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=17';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=17';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -229,7 +229,7 @@ function renderRecords() {
   renderQueue();
   const list = $('records-list'); list.replaceChildren();
   const items = records();
-  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态默认按灯色判断，可手动修正。`;
+  $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。按不足时、刚好、超时排列；以红牌为目标，前后5%为刚好（整秒，宽限最少1秒、最多10秒）。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
     const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
@@ -240,10 +240,10 @@ function renderRecords() {
       const range = document.createElement('small'); range.textContent = task.lightsEnabled === false ? standardTime(task) : `标准 ${standardTime(task)}`;
       const result = document.createElement('div'); const status = timingStatus(task);
       const time = document.createElement('strong'); time.className = `result-time ${status.color}`; time.textContent = formatTime(task.result.elapsedMs / 1000);
-      const description = document.createElement('small'); description.textContent = status.text;
+      const description = document.createElement('small'); description.className = `status-description ${status.state}`; description.textContent = status.text;
       result.append(time, description); info.append(title, range);
       const actions = document.createElement('div'); actions.className = 'record-actions';
-      const edit = document.createElement('button'); edit.textContent = '修正'; edit.addEventListener('click', () => { editId = task.id; $('edit-speaker').value = task.speaker || ''; $('edit-activity').value = activityName(task); document.querySelectorAll('[name="record-status"]').forEach(input => { input.checked = input.value === (Object.hasOwn(STATUS_OPTIONS,task.statusOverride) ? task.statusOverride : 'auto'); }); $('edit-error').textContent = ''; $('edit-record').showModal(); });
+      const edit = document.createElement('button'); edit.textContent = '修正'; edit.addEventListener('click', () => { editId = task.id; $('edit-speaker').value = task.speaker || ''; $('edit-activity').value = activityName(task); const override = normalizeStatusOverride(task.statusOverride); $('status-auto').checked = override === 'auto'; document.querySelectorAll('[name="record-status"]').forEach(input => { input.checked = input.value === timingStatus(task).state; }); const window = reportTimingWindow(task); $('status-rule').textContent = `目标 ${formatTime(window.target)} · 刚好 ${formatTime(window.lower)}–${formatTime(window.upper)}。以红牌为目标，前后5%取整秒，宽限最少1秒、最多10秒。`; $('edit-error').textContent = ''; $('edit-record').showModal(); });
       const remove = document.createElement('button'); remove.textContent = '删除'; remove.addEventListener('click', () => { if (!confirm(`删除 ${task.speaker || '待补姓名'} 的这条记录？`)) return; try { changeData(next => { const meeting = next.meetings.find(m => m.id === data.activeId); meeting.records = meeting.records.filter(t => t.id !== task.id); }); renderRecords(); } catch { $('report-message').textContent = '删除未保存，请检查浏览器存储。'; } });
       actions.append(edit, remove); row.append(info, result, actions); list.append(row);
     }
@@ -254,8 +254,14 @@ $('next').addEventListener('click', () => { resetPerson(); $('live-speaker').val
 $('meeting-select').addEventListener('change', () => { try { changeData(next => { next.activeId = $('meeting-select').value; }); resetPerson(); renderMeetings(); renderRecords(); render(); } catch { setError('切换会议未保存。'); } });
 $('new-meeting').addEventListener('click', () => { try { const meeting = newMeeting(); changeData(next => { next.meetings.push(meeting); next.activeId = meeting.id; }); resetPerson(); renderMeetings(); renderRecords(); render(); $('meeting-name').focus(); } catch { setError('无法保存新会议，请检查浏览器存储。'); } });
 for (const id of ['meeting-name','meeting-date']) $(id).addEventListener('change', () => { try { if (!$('meeting-name').value.trim() || !$('meeting-date').value) throw new Error(); changeData(next => { const m = next.meetings.find(m => m.id === data.activeId); m.name = $('meeting-name').value.trim(); m.date = $('meeting-date').value; }); renderMeetings(); renderRecords(); } catch { setError('会议名称和日期不能为空，且需要可用的本地存储。'); } });
+document.querySelectorAll('[name="record-status"]').forEach(input => ['click','change'].forEach(event => input.addEventListener(event, () => { $('status-auto').checked = false; })));
+$('status-auto').addEventListener('change', () => {
+  if (!$('status-auto').checked) return;
+  const task = records().find(task => task.id === editId);
+  if (task) document.querySelectorAll('[name="record-status"]').forEach(input => { input.checked = input.value === timingStatus({...task,statusOverride:'auto'}).state; });
+});
 $('cancel-edit').addEventListener('click', () => $('edit-record').close());
-$('edit-form').addEventListener('submit', event => { event.preventDefault(); try { const speaker = $('edit-speaker').value.trim(); const activity = $('edit-activity').value.trim(); if (!speaker || !activity) throw new Error(); changeData(next => { const task = next.meetings.find(m => m.id === data.activeId).records.find(t => t.id === editId); if (!task) throw new Error(); const statusOverride = document.querySelector('[name="record-status"]:checked')?.value; Object.assign(task,editRecord(task,{speaker,activityLabel:activity,statusOverride})); }); $('edit-record').close(); renderRecords(); } catch { $('edit-error').textContent = '请填写姓名、环节并选择状态，同时确认本地存储可用。'; } });
+$('edit-form').addEventListener('submit', event => { event.preventDefault(); try { const speaker = $('edit-speaker').value.trim(); const activity = $('edit-activity').value.trim(); if (!speaker || !activity) throw new Error(); changeData(next => { const task = next.meetings.find(m => m.id === data.activeId).records.find(t => t.id === editId); if (!task) throw new Error(); const statusOverride = $('status-auto').checked ? 'auto' : document.querySelector('[name="record-status"]:checked')?.value; Object.assign(task,editRecord(task,{speaker,activityLabel:activity,statusOverride})); }); $('edit-record').close(); renderRecords(); } catch { $('edit-error').textContent = '请填写姓名、环节并选择状态，同时确认本地存储可用。'; } });
 function saveSegment() {
   if (!segmentTimer) return true;
   const task = segmentTimer.finish();

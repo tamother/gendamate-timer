@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=15';
-import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=15';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=15';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=16';
+import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=16';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=16';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];

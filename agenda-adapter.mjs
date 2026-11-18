@@ -1,4 +1,4 @@
-import { PRESETS, MULTI_SCENES } from './timer-core.mjs?v=15';
+import { PRESETS, MULTI_SCENES } from './timer-core.mjs?v=16';
 
 export function presetForMinutes(minutes) {
   if (Number.isFinite(minutes) && minutes > 0 && minutes <= 2) return 'tableTopics';

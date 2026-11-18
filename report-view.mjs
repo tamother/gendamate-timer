@@ -1,4 +1,5 @@
-import { reportCanvasData } from './report.mjs?v=15';
+import { reportCanvasData } from './report.mjs?v=16';
+import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=16';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}
@@ -9,7 +10,7 @@ if (!snapshot || snapshot.id !== id) {
 }
 const data = reportCanvasData(snapshot.meeting, snapshot.records);
 const canvas=document.getElementById('report-image');
-canvas.width=1080;canvas.height=Math.max(1500,650+data.rows.reduce((n,r)=>n+(r.heading?100:150),0));
+canvas.width=1080;canvas.height=Math.max(1500,820+data.rows.reduce((n,r)=>n+(r.heading?100:150),0));
 const ctx=canvas.getContext('2d');
 ctx.fillStyle='#f9fbf8';ctx.fillRect(0,0,canvas.width,canvas.height);
 ctx.fillStyle='#235d46';ctx.fillRect(0,0,1080,14);
@@ -27,6 +28,10 @@ ctx.fillStyle='#edf3ed';ctx.fillRect(60,y-8,960,130);
 ctx.font='600 34px system-ui,sans-serif';text(fit(row.name,600),85,y+35,34,'#203c2d',600,600);
 text(row.range.startsWith('总时长')?row.range:'标准 '+row.range,85,y+84,23,'#748477');text(row.time,730,y+38,42,colors[row.color],700,270);
 text(row.text,560,y+86,20,colors[row.color],450,430);y+=150;}
-text('每一分钟，都值得被认真记录。',70,canvas.height-130,26,'#658675',500);
-text('头马例会计时，就用 timer.gendamate.cn',70,canvas.height-78,21,'#8b988d');
+text('每一分钟，都值得被认真记录。',70,canvas.height-130,26,'#658675',500,650);
+text('头马例会计时，就用 timer.gendamate.cn',70,canvas.height-78,21,'#8b988d',400,650);
+const qrSize=QR_MODULES.length*6;
+const qrX=canvas.width-70-qrSize;
+drawWebsiteQr(ctx,qrX,canvas.height-310,6);
+ctx.save();ctx.textAlign='center';text('扫码打开计时器',qrX+qrSize/2,canvas.height-42,22,'#658675',500,qrSize);ctx.restore();
 document.getElementById('download').onclick=()=>canvas.toBlob(blob=>{if(!blob){document.getElementById('message').textContent='图片生成失败，请尝试浏览器截图。';return;}const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='计时报告-'+data.date+'.png';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);},'image/png');

@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=13';
-import { timingStatus, editRecord, STATUS_OPTIONS, activityName, isSessionTotal, groupSummary, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=13';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=13';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=14';
+import { timingStatus, editRecord, STATUS_OPTIONS, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=14';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=14';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -232,11 +232,11 @@ function renderRecords() {
   $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。状态默认按灯色判断，可手动修正。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
-    const heading = document.createElement('h3'); heading.textContent = name; list.append(heading); const summary = document.createElement('p'); summary.className = 'group-summary'; summary.textContent = groupSummary(tasks); list.append(summary);
+    const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
     for (const task of tasks) {
-      const row = document.createElement('div'); row.className = `record report-row${isSessionTotal(task) ? ' record-total' : ''}`;
+      const row = document.createElement('div'); row.className = 'record report-row';
       const info = document.createElement('div');
-      const title = document.createElement('strong'); title.textContent = isSessionTotal(task) ? '环节总用时' : task.speaker || '待补姓名';
+      const title = document.createElement('strong'); title.textContent = task.speaker || '待补姓名';
       const range = document.createElement('small'); range.textContent = task.lightsEnabled === false ? standardTime(task) : `标准 ${standardTime(task)}`;
       const result = document.createElement('div'); const status = timingStatus(task);
       const time = document.createElement('strong'); time.className = `result-time ${status.color}`; time.textContent = formatTime(task.result.elapsedMs / 1000);

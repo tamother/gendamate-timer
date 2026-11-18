@@ -1,5 +1,5 @@
-import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=13';
-import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=13';
+import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=14';
+import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=14';
 
 export const STATUS_OPTIONS = Object.freeze({
   auto: '自动判断', neutral: '意犹未尽 · 未到绿灯', green: '从容收官 · 绿灯区',
@@ -25,16 +25,6 @@ export function timingStatus(task) {
 }
 export function standardTime(task) { return task.lightsEnabled === false ? `总时长 ${formatTime(task.targetSeconds ?? task.thresholds.red)}` : `${formatTime(task.thresholds.green)}–${formatTime(task.thresholds.red)}`; }
 export function activityName(task) { return task.activityLabel || PRESETS[task.activity]?.title || '自定义环节'; }
-export function isSessionTotal(task) { return ['tableTopicsSession','sessionTotal'].includes(task.activity); }
-export function groupSummary(tasks) {
-  const people = tasks.filter(task => !isSessionTotal(task));
-  const totals = tasks.filter(isSessionTotal);
-  const parts = [`${people.length} 次发言`];
-  const standards = new Set(people.map(standardTime));
-  if (standards.size === 1) parts.push(`标准 ${[...standards][0]}`);
-  if (totals.length) parts.push(`环节总用时 ${formatTime(totals.reduce((sum,task) => sum + task.result.elapsedMs/1000,0))}`);
-  return parts.join(' · ');
-}
 export function groupRecords(records) {
   const groups = new Map();
   const byId = new Map(records.map(task => [task.id,task]));
@@ -46,17 +36,15 @@ export function groupRecords(records) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   }
+  const rank = task => ['tableTopicsSession','sessionTotal'].includes(task.activity) ? 4 : ({neutral:0,green:1,yellow:2,red:3}[timingStatus(task).color] ?? 0);
+  for (const [key,tasks] of groups) groups.set(key,[...tasks].sort((a,b) => rank(a)-rank(b)));
   return groups;
 }
 export function reportText(meeting, records) {
   const lines = [`${meeting.name} · 计时员报告`, meeting.date, ''];
   for (const [name, tasks] of groupRecords(records)) {
-    lines.push(`【${name}】`,groupSummary(tasks));
-    for (const task of tasks.filter(task => !isSessionTotal(task))) {
-      const status = timingStatus(task);
-      const marker = {neutral:'⚪',green:'🟢',yellow:'🟨',red:'🔴'}[status.color];
-      lines.push(`${marker} ${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)} · ${status.text}`);
-    }
+    lines.push(`【${name}】`);
+    for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${standardTime(task)}）`);
     lines.push('');
   }
   lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。状态默认按提示灯时间判断，可由计时员修正，供例会计时参考。`);
@@ -69,15 +57,15 @@ function csvCell(value) {
 }
 export function reportCsv(meeting, records) {
   const rows = [['会议', '日期', '姓名', '环节', '标准用时', '实际用时', '时间状态', '绿灯秒', '黄灯秒', '红灯秒', '实际毫秒', '开始时间', '结束时间', '任务ID']];
-  for (const [name,tasks] of groupRecords(records)) for (const task of tasks) rows.push([meeting.name, meeting.date, task.speaker || '待补姓名', name, `${standardTime(task)}`, formatTime(task.result.elapsedMs / 1000), timingStatus(task).text, task.thresholds.green, task.thresholds.yellow, task.thresholds.red, task.result.elapsedMs, task.startedAt, task.endedAt, task.id]);
+  for (const tasks of groupRecords(records).values()) for (const task of tasks) rows.push([meeting.name, meeting.date, task.speaker || '待补姓名', activityName(task), `${standardTime(task)}`, formatTime(task.result.elapsedMs / 1000), timingStatus(task).text, task.thresholds.green, task.thresholds.yellow, task.thresholds.red, task.result.elapsedMs, task.startedAt, task.endedAt, task.id]);
   return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
 }
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 export function reportHtml(meeting, records) {
   let body = `<h1>${escape(meeting.name)} · 计时员报告</h1><p>${escape(meeting.date)} · 共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录</p>`;
   for (const [name, tasks] of groupRecords(records)) {
-    body += `<h2>${escape(name)}</h2><p>${escape(groupSummary(tasks))}</p><table><thead><tr><th>姓名</th><th>标准用时</th><th>实际用时</th><th>时间状态</th></tr></thead><tbody>`;
-    for (const task of tasks.filter(task => !isSessionTotal(task))) {
+    body += `<h2>${escape(name)}</h2><table><thead><tr><th>姓名</th><th>标准用时</th><th>实际用时</th><th>时间状态</th></tr></thead><tbody>`;
+    for (const task of tasks) {
       const status = timingStatus(task);
       body += `<tr><td>${escape(task.speaker || '待补姓名')}</td><td>${standardTime(task)}</td><td class="${status.color}">${formatTime(task.result.elapsedMs / 1000)}</td><td>${escape(status.text)}</td></tr>`;
     }
@@ -89,9 +77,8 @@ export function reportHtml(meeting, records) {
 export function reportCanvasData(meeting, records) {
   const rows = [];
   for (const [activity, tasks] of groupRecords(records)) {
-    rows.push({ heading: activity, summary:groupSummary(tasks) });
-    const mixedStandards = new Set(tasks.filter(task => !isSessionTotal(task)).map(standardTime)).size > 1;
-    for (const task of tasks.filter(task => !isSessionTotal(task))) rows.push({ name: task.speaker || '待补姓名', time: formatTime(task.result.elapsedMs / 1000), range: `${standardTime(task)}`, showRange:mixedStandards, ...timingStatus(task) });
+    rows.push({ heading: activity });
+    for (const task of tasks) rows.push({ name: task.speaker || '待补姓名', time: formatTime(task.result.elapsedMs / 1000), range: `${standardTime(task)}`, ...timingStatus(task) });
   }
   const startedAt = meeting.startedAt || records.map(t => t.startedAt).filter(Boolean).sort()[0];
   const endedAt = records.map(t => t.endedAt).filter(Boolean).sort().at(-1);

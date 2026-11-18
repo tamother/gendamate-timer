@@ -7,7 +7,7 @@
   <title>头马演讲计时器</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23188447%27/%3E%3Cpath d=%27M10 9h12M16 9v16%27 stroke=%27white%27 stroke-width=%274%27/%3E%3C/svg%3E">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <main class="app">
@@ -38,6 +38,6 @@
     <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><fieldset class="status-choices"><legend>用时状态 · 单选</legend><label><input type="radio" name="record-status" value="auto" checked>自动判断（按实际用时）</label><label><input type="radio" name="record-status" value="neutral">意犹未尽 · 未到绿灯</label><label><input type="radio" name="record-status" value="green">从容收官 · 绿灯区</label><label><input type="radio" name="record-status" value="yellow">踩准节奏 · 黄灯区</label><label><input type="radio" name="record-status" value="red">红灯亮啦 · 红灯区</label></fieldset><p class="hint">只调整报告的状态与用时颜色，原始用时和提示时间保持不变。选择“自动判断”可恢复。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
     <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
   </main>
-  <script type="module" src="app.mjs?v=13"></script>
+  <script type="module" src="app.mjs?v=14"></script>
 </body>
 </html>

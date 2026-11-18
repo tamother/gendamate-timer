@@ -1,5 +1,5 @@
-import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=22';
-import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=22';
+import { sceneForAgendaTitle } from './agenda-adapter.mjs?v=23';
+import { MULTI_SCENES, formatTime, PRESETS } from './timer-core.mjs?v=23';
 
 export const STATUS_OPTIONS = Object.freeze({ short:'意犹未尽', onTime:'从容收官', overTime:'精彩加时' });
 const STATUS_COLORS = Object.freeze({ short:'yellow', onTime:'green', overTime:'red' });
@@ -30,6 +30,10 @@ export function standardTime(task) {
   return `${task.lightsEnabled === false ? '总时长 ' : ''}${formatTime(target)} ± ${formatTime(tolerance)}`;
 }
 export function activityName(task) { return task.activityLabel || PRESETS[task.activity]?.title || '自定义环节'; }
+export function reportActivityName(task) { return activityName(task).replace(/\s*·\s*(分段|总用时)$/, ''); }
+export function isMultiGroup(tasks) {
+  return tasks.some(task => task.parentTaskId || ['tableTopicsSession','sessionTotal'].includes(task.activity) || /\s*·\s*分段$/.test(activityName(task)));
+}
 export function groupRecords(records) {
   const groups = new Map();
   const byId = new Map(records.map(task => [task.id,task]));
@@ -48,8 +52,8 @@ export function groupRecords(records) {
 export function reportText(meeting, records) {
   const lines = [`${meeting.name} · 计时员报告`, meeting.date, ''];
   for (const [name, tasks] of groupRecords(records)) {
-    lines.push(`【${name}】`);
-    for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}（标准 ${standardTime(task)}）`);
+    if (isMultiGroup(tasks)) lines.push(`【${name}】`);
+    for (const task of tasks) lines.push(`${task.speaker || '待补姓名'}：${formatTime(task.result.elapsedMs / 1000)}，${timingStatus(task).text}\n  ${reportActivityName(task)} · 标准 ${standardTime(task)}`);
     lines.push('');
   }
   lines.push(`共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录。以红牌时间为目标，前后5%为从容收官（整秒，宽限最少1秒、最多10秒）；状态可由计时员修正。`);
@@ -69,21 +73,21 @@ const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;
 export function reportHtml(meeting, records) {
   let body = `<h1>${escape(meeting.name)} · 计时员报告</h1><p>${escape(meeting.date)} · 共 ${records.filter(t => !['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${records.filter(t => ['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条总用时记录</p>`;
   for (const [name, tasks] of groupRecords(records)) {
-    body += `<h2>${escape(name)}</h2><table><thead><tr><th>姓名</th><th>标准用时</th><th>实际用时</th><th>时间状态</th></tr></thead><tbody>`;
+    body += `${isMultiGroup(tasks) ? `<h2>${escape(name)}</h2>` : ''}<table><thead><tr><th>姓名</th><th>标准用时</th><th>实际用时</th><th>时间状态</th></tr></thead><tbody>`;
     for (const task of tasks) {
       const status = timingStatus(task);
-      body += `<tr><td>${escape(task.speaker || '待补姓名')}</td><td>${standardTime(task)}</td><td class="${status.color}">${formatTime(task.result.elapsedMs / 1000)}</td><td>${escape(status.text)}</td></tr>`;
+      body += `<tr><td><strong>${escape(task.speaker || '待补姓名')}</strong><small>${escape(reportActivityName(task))}</small></td><td>${standardTime(task)}</td><td class="${status.color}">${formatTime(task.result.elapsedMs / 1000)}</td><td>${escape(status.text)}</td></tr>`;
     }
     body += '</tbody></table>';
   }
-  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#a65d13}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>以红牌时间为目标，前后5%为从容收官（整秒，宽限最少1秒、最多10秒）；状态可由计时员修正。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>计时员报告</title><style>body{font-family:system-ui,sans-serif;margin:24px;line-height:1.6;color:#182635}td small{display:block;margin-top:5px;color:#657568}table{border-collapse:collapse;width:100%;margin-bottom:24px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.neutral{color:#596579}.green{color:#08733d}.yellow{color:#a65d13}.red{color:#c12531}td:nth-child(3){font-weight:bold;font-size:20px;font-variant-numeric:tabular-nums}@media(max-width:500px){body{margin:12px}td,th{padding:6px;font-size:13px}}@media print{tr{break-inside:avoid}}</style><body>${body}<p>以红牌时间为目标，前后5%为从容收官（整秒，宽限最少1秒、最多10秒）；状态可由计时员修正。CSV 为纯文本，彩色样式请使用本报告。</p></body></html>`;
 }
 
 export function reportCanvasData(meeting, records) {
   const rows = [];
   for (const [activity, tasks] of groupRecords(records)) {
-    rows.push({ heading: activity });
-    for (const task of tasks) rows.push({ name: task.speaker || '待补姓名', time: formatTime(task.result.elapsedMs / 1000), range: `${standardTime(task)}`, ...timingStatus(task) });
+    if (isMultiGroup(tasks)) rows.push({ heading: activity });
+    for (const task of tasks) rows.push({ name: task.speaker || '待补姓名', activity:reportActivityName(task), time: formatTime(task.result.elapsedMs / 1000), range: `${standardTime(task)}`, ...timingStatus(task) });
   }
   const startedAt = meeting.startedAt || records.map(t => t.startedAt).filter(Boolean).sort()[0];
   const endedAt = records.map(t => t.endedAt).filter(Boolean).sort().at(-1);

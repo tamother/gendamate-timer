@@ -1,5 +1,5 @@
-import { reportCanvasData } from './report.mjs?v=22';
-import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=22';
+import { reportCanvasData } from './report.mjs?v=23';
+import { drawWebsiteQr, QR_MODULES } from './report-qr.mjs?v=23';
 const id = new URL(location.href).searchParams.get('id');
 let snapshot;
 try { snapshot = JSON.parse(localStorage.getItem('timer-report-preview')); } catch {}
@@ -20,14 +20,15 @@ text('会议计时报告',70,120,32,'#658675',500);
 ctx.font='700 54px system-ui,sans-serif';text(fit(data.name,940),70,210,54,'#203c2d',700);
 text(data.date+'  ·  '+data.span,70,275,27,'#748477');
 ctx.strokeStyle='#d9e4db';ctx.beginPath();ctx.moveTo(70,320);ctx.lineTo(1010,320);ctx.stroke();
-text('发言人 / 标准用时',70,385,23,'#748477');text('实际用时',720,385,23,'#748477');
+text('发言人 / 环节 / 标准用时',70,385,23,'#748477');text('实际用时',720,385,23,'#748477');
 text('目标为红牌时间 · 前后5%为从容收官（整秒，宽限1–10秒）',70,414,18,'#748477');
 const colors={neutral:'#718292',green:'#188447',yellow:'#b06a16',red:'#c43843'};
 let y=440;
 for(const row of data.rows){if(row.heading){text(row.heading,70,y+35,28,'#235d46',650);y+=100;continue;}
 ctx.fillStyle='#edf3ed';ctx.fillRect(60,y-8,960,130);
 ctx.font='600 34px system-ui,sans-serif';text(fit(row.name,600),85,y+35,34,'#203c2d',600,600);
-text(row.range.startsWith('总时长')?row.range:'标准 '+row.range,85,y+84,23,'#748477');text(row.time,730,y+38,42,colors[row.color],700,270);
+ctx.font='500 23px system-ui,sans-serif';text(fit(row.activity,440),85,y+70,23,'#657c6b',500,440);
+text(row.range.startsWith('总时长')?row.range:'标准 '+row.range,85,y+105,19,'#748477',400,440);text(row.time,730,y+38,42,colors[row.color],700,270);
 text(row.text,560,y+86,20,colors[row.color],450,430);y+=150;}
 text('每一分钟，都值得被认真记录。',70,canvas.height-130,26,'#658675',500,650);
 text('头马例会计时，就用 timer.gendamate.cn',70,canvas.height-78,21,'#8b988d',400,650);

@@ -186,7 +186,7 @@ test('三类手动状态覆盖全部报告，恢复自动后按原始用时判�
   const meeting={name:'本场例会',date:'2026-11-18'};
   assert.match(report.reportText(meeting,[edited]),/从容收官/);assert.match(report.reportCsv(meeting,[edited]),/从容收官/);
   assert.match(report.reportHtml(meeting,[edited]),/class="green"/);
-  assert.equal(report.reportCanvasData(meeting,[edited]).rows[1].color,'green');
+  assert.equal(report.reportCanvasData(meeting,[edited]).rows.find(row=>row.name==='张三').color,'green');
   const restored=report.editRecord(edited,{speaker:'张三',activityLabel:'备稿演讲',statusOverride:'auto'});
   assert.equal(report.timingStatus(restored).state,'short');
   for(const statusOverride of ['short','onTime','overTime']) assert.equal(report.timingStatus(report.editRecord(task,{speaker:'甲',activityLabel:'点评',statusOverride})).state,statusOverride);
@@ -202,7 +202,7 @@ test('多人环节集中归类，同状态按发言顺序展示，总用时放�
   assert.deepEqual(data.rows.filter(r=>!r.heading).map(r=>r.name),['嘉宾甲','嘉宾乙','主持人','讲者','即兴甲']);
   assert.equal(data.rows.find(r=>r.name==='主持人').time,'04:00');
   const text=report.reportText({name:'例会',date:'2026-11-18'},records);
-  assert.match(text,/嘉宾甲/);assert.ok(text.indexOf('嘉宾乙')<text.indexOf('【备稿演讲】'));
+  assert.match(text,/嘉宾甲/);assert.ok(text.indexOf('嘉宾乙')<text.indexOf('讲者：'));
   assert.ok(!text.includes('【Guest Introduction · 分段】'));
 });
 
@@ -234,4 +234,27 @@ test('旧版手动灯色与新状态兼容，自动结果不再使用灰色', ()
   assert.notEqual(report.timingStatus({...task,result:{elapsedMs:1000}}).color,report.timingStatus(task).color);
   assert.equal(report.timingStatus({...task,statusOverride:'neutral'}).state,'short');
   assert.equal(report.timingStatus({...task,statusOverride:'red'}).state,'overTime');
+});
+
+
+test('报告普通环节名称放到姓名下方，多人大环节保留标题且每人也显示环节', () => {
+  const make=(id,activity,activityLabel,extra={})=>({id,speaker:id,activity,activityLabel,title:'不展示题目',thresholds:PRESETS.tableTopics,result:{elapsedMs:120000},...extra});
+  const plain=make('普通讲者','speech','项目汇报');
+  const single=make('单人即兴','tableTopics','即兴演讲');
+  const solo=report.reportCanvasData({name:'例会'},[plain,single]);
+  assert.equal(solo.rows.filter(row=>row.heading).length,0);
+  assert.equal(solo.rows[0].activity,'项目汇报');
+  assert.equal(solo.rows[1].activity,'即兴演讲');
+  const parent=make('主持人','tableTopicsSession','即兴演讲',{lightsEnabled:false,targetSeconds:1200});
+  const part=make('即兴讲者','tableTopics','即兴演讲 · 分段',{parentTaskId:parent.id});
+  const data=report.reportCanvasData({name:'例会'},[plain,part,parent]);
+  assert.deepEqual(data.rows.filter(row=>row.heading).map(row=>row.heading),['即兴演讲']);
+  assert.equal(data.rows.find(row=>row.name==='即兴讲者').activity,'即兴演讲');
+  assert.ok(!JSON.stringify(data).includes('不展示题目'));
+  const text=report.reportText({name:'例会'},[plain,part,parent]);
+  assert.ok(!text.includes('【项目汇报】'));assert.match(text,/【即兴演讲】/);
+  assert.match(text,/普通讲者[^\n]*\n[^\n]*项目汇报/);
+  const html=report.reportHtml({name:'例会'},[plain,part,parent]);
+  assert.ok(!html.includes('<h2>项目汇报</h2>'));
+  assert.match(html,/<strong>普通讲者<\/strong><small>项目汇报<\/small>/);
 });

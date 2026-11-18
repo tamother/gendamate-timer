@@ -1,6 +1,6 @@
-import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=22';
-import { timingStatus, editRecord, normalizeStatusOverride, reportTimingWindow, activityName, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=22';
-import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=22';
+import { PRESETS, MULTI_SCENES, nextSpeakerName, Timer, makeTask, formatTime, thresholdsForDuration, presentationState } from './timer-core.mjs?v=23';
+import { timingStatus, editRecord, normalizeStatusOverride, reportTimingWindow, activityName, reportActivityName, isMultiGroup, groupRecords, reportText, reportCsv, standardTime } from './report.mjs?v=23';
+import { parseAgendaImport, upgradeAgendaPlans, saveTimingRecord } from './agenda-adapter.mjs?v=23';
 
 const $ = id => document.getElementById(id);
 const fields = ['preset', 'title', 'green', 'yellow', 'red', 'sound', 'topics-minutes', 'topics-seconds', 'session-scene'];
@@ -242,16 +242,17 @@ function renderRecords() {
   $('report-summary').textContent = `${currentMeeting().date} · ${currentMeeting().name} · ${items.filter(t=>!['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 次个人发言，${items.filter(t=>['tableTopicsSession','sessionTotal'].includes(t.activity)).length} 条环节总用时记录。按意犹未尽、从容收官、精彩加时排列；以红牌为目标，前后5%为从容收官（整秒，宽限最少1秒、最多10秒）。`;
   if (!items.length) { list.textContent = '本场还没有记录，结束计时后会自动加入。'; return; }
   for (const [name, tasks] of groupRecords(items)) {
-    const heading = document.createElement('h3'); heading.textContent = name; list.append(heading);
+    if (isMultiGroup(tasks)) { const heading = document.createElement('h3'); heading.textContent = name; list.append(heading); }
     for (const task of tasks) {
       const row = document.createElement('div'); row.className = 'record report-row';
       const info = document.createElement('div');
       const title = document.createElement('strong'); title.textContent = task.speaker || '待补姓名';
+      const activity = document.createElement('small'); activity.className = 'record-activity'; activity.textContent = reportActivityName(task);
       const range = document.createElement('small'); range.textContent = task.lightsEnabled === false ? standardTime(task) : `标准 ${standardTime(task)}`;
       const result = document.createElement('div'); const status = timingStatus(task);
       const time = document.createElement('strong'); time.className = `result-time ${status.color}`; time.textContent = formatTime(task.result.elapsedMs / 1000);
       const description = document.createElement('small'); description.className = `status-description ${status.state}`; description.textContent = status.text;
-      result.append(time, description); info.append(title, range);
+      result.append(time, description); info.append(title, activity, range);
       const actions = document.createElement('div'); actions.className = 'record-actions';
       const edit = document.createElement('button'); edit.textContent = '修正'; edit.addEventListener('click', () => { editId = task.id; $('edit-speaker').value = task.speaker || ''; $('edit-activity').value = activityName(task); const override = normalizeStatusOverride(task.statusOverride); $('status-auto').checked = override === 'auto'; document.querySelectorAll('[name="record-status"]').forEach(input => { input.checked = input.value === timingStatus(task).state; }); const window = reportTimingWindow(task); $('status-rule').textContent = `目标 ${formatTime(window.target)} · 从容收官 ${formatTime(window.lower)}–${formatTime(window.upper)}。以红牌为目标，前后5%取整秒，宽限最少1秒、最多10秒。`; $('edit-error').textContent = ''; $('edit-record').showModal(); });
       const remove = document.createElement('button'); remove.textContent = '删除'; remove.addEventListener('click', () => { if (!confirm(`删除 ${task.speaker || '待补姓名'} 的这条记录？`)) return; try { changeData(next => { const meeting = next.meetings.find(m => m.id === data.activeId); meeting.records = meeting.records.filter(t => t.id !== task.id); }); renderRecords(); } catch { $('report-message').textContent = '删除未保存，请检查浏览器存储。'; } });

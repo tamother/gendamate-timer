@@ -1,5 +1,5 @@
-const CACHE='speech-timer-v19';
-const FILES=['./','./index.html','./style.css?v=19','./app.mjs?v=19','./report.mjs?v=19','./timer-core.mjs?v=19','./agenda-adapter.mjs?v=19','./manifest.webmanifest','./report.html','./report-view.mjs?v=19','./report-qr.mjs?v=19'];
+const CACHE='speech-timer-v20';
+const FILES=['./','./index.html','./style.css?v=20','./app.mjs?v=20','./report.mjs?v=20','./timer-core.mjs?v=20','./agenda-adapter.mjs?v=20','./manifest.webmanifest','./report.html','./report-view.mjs?v=20','./report-qr.mjs?v=20'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('speech-timer-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

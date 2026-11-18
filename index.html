@@ -7,7 +7,7 @@
   <title>头马演讲计时器</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23188447%27/%3E%3Cpath d=%27M10 9h12M16 9v16%27 stroke=%27white%27 stroke-width=%274%27/%3E%3C/svg%3E">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <main class="app">
@@ -27,7 +27,7 @@
       <section id="timer-panel" class="timer-panel" aria-label="计时器">
         <button id="exit-display" class="exit-display" hidden>退出指示牌</button><div class="panel-head"><span id="status">准备就绪</span><span id="color-label">未到提示时间</span></div>
         <div id="topics-budget" class="topics-budget" hidden><div><span>环节剩余时间</span><strong id="topics-remaining">20:00</strong></div><span id="topics-budget-note">总时长到点仅标红此栏</span></div><div id="display" class="display neutral"><div id="display-title" class="display-title">备稿演讲</div><div id="digits" class="digits">00:00</div><div id="display-state" class="display-state">准备开始</div></div>
-        <section id="quick-next" class="quick-next" aria-label="快速开始下一位"><div class="quick-heading"><strong id="quick-heading">准备下一位</strong><span>先计时，姓名稍后补</span></div><div id="quick-types" class="quick-types" aria-label="快速选择环节"><button type="button" data-quick="speech"><strong>7分钟</strong><small>备稿演讲</small></button><button type="button" data-quick="evaluation"><strong>3分钟</strong><small>点评</small></button><button type="button" data-quick="topics">即兴环节</button><button type="button" data-quick="guests">嘉宾介绍</button><button type="button" data-quick="sharing">真情分享</button><button type="button" data-quick="custom">自定义</button></div><label id="live-speaker-label">发言人（可稍后补）<input id="live-speaker" maxlength="60" autocomplete="off" placeholder="留空将自动编号"></label><p id="quick-note" class="hint" role="status">选择类型后即可开始，无需先填写姓名。</p></section>
+        <section id="quick-next" class="quick-next" aria-label="快速开始下一位"><div class="quick-heading"><strong id="quick-heading">准备下一位</strong><span>先计时，姓名稍后补</span></div><div id="quick-types" class="quick-types" aria-label="快速选择环节"><button type="button" data-quick="speech"><strong>7分钟</strong><small>备稿演讲</small></button><button type="button" data-quick="evaluation"><strong>3分钟</strong><small>点评</small></button><button type="button" data-quick="tableTopics"><strong>2分钟</strong><small>单人发言</small></button><button type="button" data-quick="topics">即兴环节</button><button type="button" data-quick="guests">嘉宾介绍</button><button type="button" data-quick="sharing">真情分享</button><button type="button" data-quick="custom">自定义</button></div><label id="live-speaker-label">发言人（可稍后补）<input id="live-speaker" maxlength="60" autocomplete="off" placeholder="留空将自动编号"></label><p id="quick-note" class="hint" role="status">选择类型后即可开始，无需先填写姓名。</p></section>
         <div class="actions"><button id="start" class="primary">开始本轮计时</button><button id="pause" disabled>暂停</button><button id="finish" disabled>结束并保存</button><button id="reset">重置</button><button id="next" disabled>下一位</button></div>
         <div id="segments" class="segments" hidden><div class="segment-heading"><h3>分段计时</h3><span id="total-time">本轮累计 00:00</span></div><div class="segment-input"><input id="segment-name" aria-label="分段发言人" maxlength="60" placeholder="下一位发言人（可稍后修正）"><button id="add-segment" disabled>开始第一位</button><button id="end-segment" disabled>结束分段</button></div><p id="segment-hint" class="hint">开始本轮计时后，可逐位新增分段。总用时持续累计。</p></div>
         <div class="view-options"><span>观众展示</span><button id="number-mode" class="selected" aria-pressed="true">颜色 + 数字</button><button id="color-mode" aria-pressed="false">纯色</button><button id="fullscreen">手机指示牌 / 全屏</button></div>
@@ -38,6 +38,6 @@
     <dialog id="edit-record"><form id="edit-form"><h2>修正记录</h2><label>姓名<input id="edit-speaker" required maxlength="60"></label><label>环节<input id="edit-activity" required maxlength="80"></label><fieldset class="status-choices"><legend>用时状态 · 单选</legend><label class="status-short"><input type="radio" name="record-status" value="short"><span class="status-dot" aria-hidden="true"></span>意犹未尽</label><label class="status-onTime"><input type="radio" name="record-status" value="onTime"><span class="status-dot" aria-hidden="true"></span>从容收官</label><label class="status-overTime"><input type="radio" name="record-status" value="overTime"><span class="status-dot" aria-hidden="true"></span>精彩加时</label></fieldset><label class="check"><input id="status-auto" type="checkbox" checked>按实际用时自动判断</label><p id="status-rule" class="hint"></p><p class="hint">选择状态会改为手动修正。勾选自动判断即可恢复；原始用时和提示牌时间保留。</p><div class="report-actions"><button type="button" id="cancel-edit">取消</button><button type="submit">保存修改</button></div><p id="edit-error" role="alert"></p></form></dialog>
     <footer>建议在腾讯会议中共享此网页窗口；需要虚拟摄像头画面时，可在 OBS 中添加浏览器来源。</footer>
   </main>
-  <script type="module" src="app.mjs?v=19"></script>
+  <script type="module" src="app.mjs?v=20"></script>
 </body>
 </html>
